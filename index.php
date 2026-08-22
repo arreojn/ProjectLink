@@ -46,7 +46,7 @@ if (is_post() && $databaseConnectionOk) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= escape(APP_NAME) ?></title>
+<title>Project LINK</title>
 
 <link rel="stylesheet" href="<?= escape(asset_url('vendor/bootstrap/css/bootstrap.min.css')) ?>">
 <link rel="stylesheet" href="<?= escape(asset_url('loginassets/fonts/font-awesome-4.7.0/css/font-awesome.min.css')) ?>">
@@ -77,17 +77,16 @@ if (is_post() && $databaseConnectionOk) {
 <div class="login100-pic js-tilt" data-tilt>
 <img src="<?= escape(asset_url('assets/images/pulselogo.png')) ?>" class="auth-logo" alt="Project PULSE">
 
-<h1 class="project-title">Project PULSE</h1>
+<h1 class="project-title">Project LINK</h1>
 
 <p class="project-subtitle">
-Portal for Unified Learner Monitoring,<br>
-School Records and Engagement
+Learner Information Network and Knowledgebase<br>
 </p>
 
 <div class="about-card">
-<h4>About Project PULSE</h4>
+<h4>About Project LINK</h4>
 <p>
-Project PULSE is an integrated school information system that centralizes learner records,
+Project LINK is an integrated school information system that centralizes learner records,
 attendance, academic performance, health monitoring, and stakeholder engagement through
 secure role-based access for administrators, teachers, parents, guidance counselors,
 and health coordinators.
