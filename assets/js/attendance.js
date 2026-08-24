@@ -8,6 +8,7 @@
         return;
     }
 
+    const projectConfig = window.ProjectLink || window.ProjectPulse || {};
     const state = {
         activeLrn: '',
         lookupTimer: null,
@@ -19,7 +20,7 @@
         label: 'Strict Time Windows',
         description: 'Follows the configured AM and PM attendance windows.',
         canEdit: false,
-    }, window.ProjectPulse.scanMode || {});
+    }, projectConfig.scanMode || {});
 
     const fields = {
         name: document.getElementById('learner-name'),
@@ -40,7 +41,7 @@
         learnerPhoto: document.getElementById('learner-photo'),
     };
     const learnerPhotoExtensions = ['jpg', 'jpeg', 'png', 'webp'];
-    const defaultLearnerPhotoUrl = window.ProjectPulse.defaultLearnerPhotoUrl || '';
+    const defaultLearnerPhotoUrl = projectConfig.defaultLearnerPhotoUrl || '';
 
     const clearInputForNextScan = function () {
         searchInput.value = '';
@@ -104,7 +105,7 @@
     };
 
     const loadLearnerPhoto = function (lrn) {
-        if (!fields.learnerPhoto || !window.ProjectPulse.learnerPhotoBaseUrl) {
+        if (!fields.learnerPhoto || !projectConfig.learnerPhotoBaseUrl) {
             return;
         }
 
@@ -117,7 +118,7 @@
             }
 
             const extension = learnerPhotoExtensions[extensionIndex];
-            const photoUrl = window.ProjectPulse.learnerPhotoBaseUrl + encodeURIComponent(lrn) + '.' + extension;
+            const photoUrl = projectConfig.learnerPhotoBaseUrl + encodeURIComponent(lrn) + '.' + extension;
             extensionIndex += 1;
 
             fields.learnerPhoto.onerror = tryNextPhoto;
@@ -200,7 +201,7 @@
     };
 
     const fetchLearner = function (lrn) {
-        return fetch(window.ProjectPulse.lookupUrl + '?lrn=' + encodeURIComponent(lrn), {
+        return fetch(projectConfig.lookupUrl + '?lrn=' + encodeURIComponent(lrn), {
             credentials: 'same-origin',
         })
             .then(function (response) {
@@ -219,7 +220,7 @@
     };
 
     const fetchAttendanceLogs = function () {
-        return fetch(window.ProjectPulse.attendanceLogsUrl, {
+        return fetch(projectConfig.attendanceLogsUrl, {
             credentials: 'same-origin',
         })
             .then(function (response) {
@@ -248,7 +249,7 @@
         state.processing = true;
         showInputMessage('');
 
-        fetch(window.ProjectPulse.attendanceEventUrl, {
+        fetch(projectConfig.attendanceEventUrl, {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
@@ -256,7 +257,7 @@
             },
             body: new URLSearchParams({
                 lrn: lrn,
-                csrf_token: window.ProjectPulse.csrfToken,
+                csrf_token: projectConfig.csrfToken,
             }).toString(),
         })
             .then(function (response) {
@@ -306,7 +307,7 @@
         fields.scanModeToggle.disabled = true;
         setScanModeFeedback('Updating scan mode...', false);
 
-        fetch(window.ProjectPulse.scanModeUpdateUrl, {
+        fetch(projectConfig.scanModeUpdateUrl, {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
@@ -314,7 +315,7 @@
             },
             body: new URLSearchParams({
                 mode: mode,
-                csrf_token: window.ProjectPulse.csrfToken,
+                csrf_token: projectConfig.csrfToken,
             }).toString(),
         })
             .then(function (response) {

@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS project_pulse;
-USE project_pulse;
+CREATE DATABASE IF NOT EXISTS project_link;
+USE project_link;
 
 CREATE TABLE users (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -327,12 +327,12 @@ INSERT IGNORE INTO attendance_legends (code, label, color_hex, counts_as_present
 ('E', 'Excused', '#3182CE', 0);
 
 INSERT IGNORE INTO users (username, email, first_name, middle_name, last_name, password_hash, role, is_active) VALUES
-('attendance_admin', 'attendance@projectpulse.local', 'Attendance', NULL, 'Admin', '$2y$10$v7qjEmsTgoPzJGUOGr0aL.YGT1PAB6j/yuqMcg6evfkLSqrDwaDLC', 'admin', 1),
-('portal_admin', 'admin@projectpulse.local', 'Portal', NULL, 'Admin', '$2y$10$8vrYlwt9a/sRLnGWs01UDO5UYQ1iisGoy3m2LiOtne99.IuOR4n7G', 'admin', 1),
-('attendance_user', 'attendance-user@projectpulse.local', 'Attendance', NULL, 'User', '$2y$10$v7qjEmsTgoPzJGUOGr0aL.YGT1PAB6j/yuqMcg6evfkLSqrDwaDLC', 'attendance', 1),
-('health_coordinator', 'health@projectpulse.local', 'Health', NULL, 'Coordinator', '$2y$10$cLV/PRK6X6TVzrXWbGsRQe40bsHF6HXj./M8DLmLgIvln/.yDUHoS', 'health', 1),
-('teacher_mabini', 'teacher.mabini@projectpulse.local', 'Mabini', 'Demo', 'Teacher', '$2y$10$MowOCypAlH70pG7wAMix3.cddt8d.B66dIBvCfhptP958vYLiu5bi', 'teacher', 1),
-('demo_parent', 'parent@projectpulse.local', 'Ana', 'Santos', 'Dela Cruz', '$2y$10$bRKpueTjVab73zPzrBUyBe.3iRircjMowF66LfB1UuA/QZv4Vw9T.', 'parent', 1);
+('attendance_admin', 'attendance@projectlink.local', 'Attendance', NULL, 'Admin', '$2y$10$v7qjEmsTgoPzJGUOGr0aL.YGT1PAB6j/yuqMcg6evfkLSqrDwaDLC', 'admin', 1),
+('portal_admin', 'admin@projectlink.local', 'Portal', NULL, 'Admin', '$2y$10$8vrYlwt9a/sRLnGWs01UDO5UYQ1iisGoy3m2LiOtne99.IuOR4n7G', 'admin', 1),
+('attendance_user', 'attendance-user@projectlink.local', 'Attendance', NULL, 'User', '$2y$10$v7qjEmsTgoPzJGUOGr0aL.YGT1PAB6j/yuqMcg6evfkLSqrDwaDLC', 'attendance', 1),
+('health_coordinator', 'health@projectlink.local', 'Health', NULL, 'Coordinator', '$2y$10$cLV/PRK6X6TVzrXWbGsRQe40bsHF6HXj./M8DLmLgIvln/.yDUHoS', 'health', 1),
+('teacher_mabini', 'teacher.mabini@projectlink.local', 'Mabini', 'Demo', 'Teacher', '$2y$10$MowOCypAlH70pG7wAMix3.cddt8d.B66dIBvCfhptP958vYLiu5bi', 'teacher', 1),
+('demo_parent', 'parent@projectlink.local', 'Ana', 'Santos', 'Dela Cruz', '$2y$10$bRKpueTjVab73zPzrBUyBe.3iRircjMowF66LfB1UuA/QZv4Vw9T.', 'parent', 1);
 
 INSERT IGNORE INTO school_years (label, start_date, end_date, is_current) VALUES
 ('2026-2027', '2026-06-01', '2027-03-31', 1);
@@ -377,7 +377,7 @@ SELECT
     'Santos',
     'Dela Cruz',
     '09171234567',
-    'ProjectPulse Demo Household'
+    'ProjectLink Demo Household'
 FROM users u
 WHERE u.username = 'demo_parent';
 

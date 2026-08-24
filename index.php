@@ -75,7 +75,7 @@ if (is_post() && $databaseConnectionOk) {
 <div class="wrap-login100">
 
 <div class="login100-pic js-tilt" data-tilt>
-<img src="<?= escape(asset_url('assets/images/pulselogo.png')) ?>" class="auth-logo" alt="Project PULSE">
+<img src="<?= escape(asset_url('assets/images/pulselogo.png')) ?>" class="auth-logo" alt="Project LINK">
 
 <h1 class="project-title">Project LINK</h1>
 

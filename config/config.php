@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 date_default_timezone_set('Asia/Manila');
 
-function projectpulse_normalize_path(string $path): string
+function projectlink_normalize_path(string $path): string
 {
     return str_replace('\\', '/', rtrim($path, "\\/"));
 }
 
-function projectpulse_detect_base_path(): string
+function projectlink_detect_base_path(): string
 {
-    $defaultBasePath = '/ProjectPulse';
+    $defaultBasePath = '/ProjectLink';
     $projectRoot = realpath(__DIR__ . '/..');
     $documentRoot = isset($_SERVER['DOCUMENT_ROOT']) ? realpath((string) $_SERVER['DOCUMENT_ROOT']) : false;
 
@@ -19,8 +19,8 @@ function projectpulse_detect_base_path(): string
         return $defaultBasePath;
     }
 
-    $normalizedProjectRoot = projectpulse_normalize_path($projectRoot);
-    $normalizedDocumentRoot = projectpulse_normalize_path($documentRoot);
+    $normalizedProjectRoot = projectlink_normalize_path($projectRoot);
+    $normalizedDocumentRoot = projectlink_normalize_path($documentRoot);
 
     if ($normalizedProjectRoot === $normalizedDocumentRoot) {
         return '';
@@ -42,7 +42,7 @@ function projectpulse_detect_base_path(): string
     return '/' . trim($relativePath, '/');
 }
 
-function projectpulse_detect_scheme(): string
+function projectlink_detect_scheme(): string
 {
     $httpsValue = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
 
@@ -59,7 +59,7 @@ function projectpulse_detect_scheme(): string
     return 'http';
 }
 
-function projectpulse_detect_host(): string
+function projectlink_detect_host(): string
 {
     $forwardedHost = trim((string) ($_SERVER['HTTP_X_FORWARDED_HOST'] ?? ''));
 
@@ -87,16 +87,16 @@ function projectpulse_detect_host(): string
     return $serverName . ':' . $serverPort;
 }
 
-function projectpulse_detect_base_url(): string
+function projectlink_detect_base_url(): string
 {
-    return projectpulse_detect_scheme() . '://' . projectpulse_detect_host() . projectpulse_detect_base_path();
+    return projectlink_detect_scheme() . '://' . projectlink_detect_host() . projectlink_detect_base_path();
 }
 
-define('APP_NAME', 'ProjectPulse');
-define('APP_BASE_PATH', projectpulse_detect_base_path());
-define('BASE_URL', projectpulse_detect_base_url());
+define('APP_NAME', 'Project LINK');
+define('APP_BASE_PATH', projectlink_detect_base_path());
+define('BASE_URL', projectlink_detect_base_url());
 define('DB_HOST', '127.0.0.1');
 define('DB_PORT', '3306');
-define('DB_NAME', 'project_pulse');
+define('DB_NAME', 'project_link');
 define('DB_USER', 'root');
 define('DB_PASS', '');

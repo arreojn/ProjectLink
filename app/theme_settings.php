@@ -6,7 +6,7 @@ function theme_predefined_sets(): array
 {
     return [
         'default' => [
-            'name' => 'ProjectPulse Default',
+            'name' => 'Project LINK Default',
             'colors' => [
                 'theme_color_accent' => '#b45309',
                 'theme_color_accent_strong' => '#7c2d12',
@@ -156,7 +156,7 @@ function theme_inline_styles(): string
         . '--shadow: 0 24px 60px color-mix(in srgb, var(--accent-strong) 12%, transparent) !important;'
         . '}';
 
-    return '<style id="projectpulse-theme">' . $css . '</style>';
+    return '<style id="projectlink-theme">' . $css . '</style>';
 }
 
 function theme_settings_stylesheet_markup(): string

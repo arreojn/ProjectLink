@@ -12,6 +12,7 @@ require_once __DIR__ . '/app/theme_settings.php';
 
 try {
     announcements_bootstrap();
+    guidance_portal_bootstrap();
     theme_settings_bootstrap();
 } catch (Throwable $exception) {
     // Keep the portal available even if table creation fails.
@@ -22,6 +23,11 @@ $flash = flash_get('guidance_portal');
 
 // Handle theme change
 if (is_post() && isset($_POST['action']) && $_POST['action'] === 'change_theme') {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+        flash_set('guidance_portal', 'Invalid form token. Please refresh the page.');
+        redirect('guidance.php?' . http_build_query($_GET));
+    }
+
     // A list of allowed themes to prevent arbitrary values.
     $allowedThemes = ['default', 'light', 'dark'];
     $selectedTheme = (string) ($_POST['theme'] ?? 'default');
@@ -263,7 +269,7 @@ if ($module === 'case_detail' && $editingCase === null) {
             <?php endif; ?>
 
             <?php if ($module === 'dashboard'): ?>
-                <section class="teacher-summary-grid">
+                <section class="teacher-summary-grid guidance-summary-grid">
                         <article class="summary-card">
                             <p class="eyebrow">Active Cases</p>
                             <h3><?php echo escape((string) $stats['active_cases']); ?></h3>
@@ -373,7 +379,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                         <h2><?php echo $editingCase !== null ? 'Update Guidance Case' : 'Create Guidance Case'; ?></h2>
                         <p>Fields for managing a learner guidance case file.</p>
                     </div>
-                    <form method="post" class="teacher-form-grid">
+                    <form method="post" class="teacher-form-grid guidance-case-form">
                         <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                         <input type="hidden" name="save_case" value="1">
                         <?php if ($editingCase !== null): ?>
@@ -846,6 +852,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                             <p>Choose a visual theme for the portal.</p>
                         </div>
                         <form method="post">
+                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="action" value="change_theme">
                             <div class="teacher-form-grid">
                                 <div class="teacher-form-grid-full">

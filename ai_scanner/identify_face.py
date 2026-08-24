@@ -1,4 +1,4 @@
-"""OpenCV LBPH recognition bridge for ProjectPulse facial attendance.
+"""OpenCV LBPH recognition bridge for Project LINK facial attendance.
 
 Learner registrations are named ``<12-digit-LRN>.jpg`` in
 ``assets/images/learners``.  PHP remains responsible for authentication and

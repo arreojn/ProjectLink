@@ -343,12 +343,12 @@ function dashboard_path_for_role(?string $role): string
 {
     return match ($role) {
         'admin' => 'admin.php',
-        'attendance' => 'attendance.php',
+        'attendance' => 'admin.php',
         'health' => 'health.php',
         'guidance' => 'guidance.php',
         'teacher' => 'teacher.php',
         'parent' => 'parent.php',
-        default => 'attendance.php',
+        default => 'index.php',
     };
 }
 

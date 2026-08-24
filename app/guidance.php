@@ -25,7 +25,7 @@ function guidance_portal_bootstrap(): void
          VALUES (:username, :email, :first_name, :middle_name, :last_name, :password_hash, :role, :is_active)'
     )->execute([
         'username' => 'guidance_counselor',
-        'email' => 'guidance@projectpulse.local',
+        'email' => 'guidance@projectlink.local',
         'first_name' => 'Guidance',
         'middle_name' => null,
         'last_name' => 'Counselor',
@@ -361,13 +361,15 @@ function guidance_upcoming_followups(int $limit = 5): array
 function guidance_save_case(array $data, ?int $userId = null): int
 {
     $pdo = database();
-    $lrn = trim((string) ($data['lrn'] ?? ''));
-    $learnerId = 0;
+    $learnerId = (int) ($data['learner_id'] ?? 0);
 
-    if ($lrn !== '') {
-        $learnerStatement = $pdo->prepare('SELECT id FROM learners WHERE lrn = :lrn LIMIT 1');
-        $learnerStatement->execute(['lrn' => $lrn]);
-        $learnerId = (int) $learnerStatement->fetchColumn();
+    if ($learnerId <= 0) {
+        $lrn = trim((string) ($data['lrn'] ?? ''));
+        if ($lrn !== '') {
+            $learnerStatement = $pdo->prepare('SELECT id FROM learners WHERE lrn = :lrn LIMIT 1');
+            $learnerStatement->execute(['lrn' => $lrn]);
+            $learnerId = (int) $learnerStatement->fetchColumn();
+        }
     }
     $caseId = isset($data['id']) ? (int) $data['id'] : 0;
     $caseNumber = trim((string) ($data['case_number'] ?? ''));

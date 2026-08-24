@@ -1,4 +1,4 @@
-"""Persistent localhost recognition worker for ProjectPulse.
+"""Persistent localhost recognition worker for Project LINK.
 
 Keeping OpenCV's detector and LBPH model in memory removes the Python startup
 and model-loading work from every attendance scan.

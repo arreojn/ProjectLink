@@ -1040,6 +1040,138 @@ textarea:focus {
     line-height: 1.1;
 }
 
+.chart-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: space-around;
+    margin-top: 20px;
+}
+
+.chart-card {
+    background: var(--surface-strong);
+    border: 1px solid var(--line);
+    border-radius: 28px;
+    box-shadow: var(--shadow);
+    padding: 20px;
+    flex: 1;
+    min-width: 260px;
+    max-width: 45%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.chart-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 15px;
+    color: var(--ink);
+}
+
+.pie-chart {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: conic-gradient(
+        var(--success) 0% var(--slice1),
+        var(--warning) var(--slice1) var(--slice2),
+        var(--danger) var(--slice2) var(--slice3),
+        var(--info) var(--slice3) var(--slice4),
+        var(--muted) var(--slice4) 100%
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    color: var(--surface-strong);
+    font-weight: 600;
+    position: relative;
+}
+
+.pie-chart::before {
+    content: '';
+    position: absolute;
+    background: var(--surface-strong);
+    border-radius: 50%;
+    width: 60%;
+    height: 60%;
+}
+
+.pie-chart span {
+    position: relative;
+    z-index: 1;
+    color: var(--ink);
+    text-align: center;
+    line-height: 1.2;
+}
+
+.chart-legend {
+    margin-top: 20px;
+    width: 100%;
+    display: grid;
+    gap: 8px;
+}
+
+.chart-legend-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 0.9rem;
+}
+
+.chart-legend-item span:first-child {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chart-legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.bar-chart-container {
+    width: 100%;
+    height: 150px;
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+}
+
+.bar-chart-bar {
+    flex: 1;
+    border-radius: 5px 5px 0 0;
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    color: var(--surface-strong);
+    font-size: 0.75rem;
+    font-weight: 700;
+    transition: height 0.5s ease-out;
+}
+
+.bar-chart-bar span {
+    position: absolute;
+    top: -20px;
+    color: var(--ink);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.bar-chart-label {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 5px;
+}
+
 .admin-module-grid {
     display: grid;
     grid-template-columns: 320px minmax(0, 1fr);
@@ -1402,11 +1534,27 @@ textarea:focus {
     gap: 12px;
 }
 
+.guidance-summary-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.guidance-case-form {
+    align-items: start;
+}
+
 .teacher-overview-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
     gap: 14px;
     align-items: stretch;
+}
+
+.health-snapshot-section {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.health-snapshot-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .guidance-dashboard-stack {
@@ -1767,6 +1915,61 @@ textarea:focus {
     min-width: 180px;
 }
 
+.attendance-status-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+
+.teacher-attendance-table-shell {
+    width: 100%;
+}
+
+.teacher-attendance-table-shell .records-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.teacher-attendance-table-shell th:first-child,
+.teacher-attendance-table-shell td:first-child {
+    width: 22%;
+}
+
+.teacher-attendance-table-shell th:nth-child(2),
+.teacher-attendance-table-shell td:nth-child(2) {
+    width: 16%;
+}
+
+.teacher-attendance-table-shell th:last-child,
+.teacher-attendance-table-shell td:last-child {
+    width: 62%;
+}
+
+.attendance-status-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 8px;
+    border: 1px solid rgba(31, 41, 51, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.7);
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.attendance-status-option input[type="radio"] {
+    width: auto;
+    margin: 0;
+}
+
+.attendance-status-option:focus-within {
+    outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    outline-offset: 1px;
+}
+
 .table-input-slim {
     min-width: 92px;
     padding: 10px 12px;
@@ -1847,6 +2050,327 @@ textarea:focus {
 .learner-table th,
 .learner-table td {
     white-space: nowrap;
+}
+
+.learner-table {
+    min-width: 1120px;
+    table-layout: fixed;
+}
+
+.learner-table th:nth-child(1),
+.learner-table td:nth-child(1) {
+    width: 130px;
+}
+
+.learner-table th:nth-child(2),
+.learner-table td:nth-child(2) {
+    width: 280px;
+}
+
+.learner-table th:nth-child(3),
+.learner-table td:nth-child(3) {
+    width: 100px;
+}
+
+.learner-table th:nth-child(4),
+.learner-table td:nth-child(4) {
+    width: 150px;
+}
+
+.learner-table th:nth-child(5),
+.learner-table td:nth-child(5) {
+    width: 150px;
+}
+
+.learner-table th:nth-child(6),
+.learner-table td:nth-child(6),
+.learner-table th:nth-child(7),
+.learner-table td:nth-child(7) {
+    width: 90px;
+}
+
+.learner-table th:nth-child(8),
+.learner-table td:nth-child(8) {
+    width: 140px;
+}
+
+.learner-table td:nth-child(4) .table-input-slim,
+.learner-table td:nth-child(5) .table-input-slim {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.health-selected-filter-label {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin: 12px 0;
+    padding: 10px 12px;
+    border-left: 3px solid var(--accent);
+    background: rgba(180, 83, 9, 0.06);
+    color: var(--ink);
+}
+
+.bmi-report-table {
+    min-width: 1260px;
+    table-layout: auto;
+}
+
+.bmi-report-table th,
+.bmi-report-table td {
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.bmi-report-table th:nth-child(1),
+.bmi-report-table td:nth-child(1) {
+    min-width: 130px;
+}
+
+.bmi-report-table th:nth-child(2),
+.bmi-report-table td:nth-child(2) {
+    min-width: 230px;
+}
+
+.bmi-report-table th:nth-child(3),
+.bmi-report-table td:nth-child(3) {
+    min-width: 180px;
+}
+
+.bmi-report-table th:nth-child(4),
+.bmi-report-table td:nth-child(4) {
+    min-width: 80px;
+}
+
+.bmi-report-table th:nth-child(5),
+.bmi-report-table td:nth-child(5) {
+    min-width: 220px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.bmi-report-table th:nth-child(6),
+.bmi-report-table td:nth-child(6),
+.bmi-report-table th:nth-child(7),
+.bmi-report-table td:nth-child(7),
+.bmi-report-table th:nth-child(8),
+.bmi-report-table td:nth-child(8) {
+    min-width: 95px;
+}
+
+.bmi-report-table th:nth-child(9),
+.bmi-report-table td:nth-child(9) {
+    min-width: 130px;
+}
+
+.disability-table {
+    min-width: 1050px;
+    table-layout: fixed;
+}
+
+.disability-table th:nth-child(1),
+.disability-table td:nth-child(1) {
+    width: 130px;
+}
+
+.disability-table th:nth-child(2),
+.disability-table td:nth-child(2) {
+    width: 250px;
+}
+
+.disability-table th:nth-child(3),
+.disability-table td:nth-child(3) {
+    width: 80px;
+}
+
+.disability-table th:nth-child(4),
+.disability-table td:nth-child(4),
+.disability-table th:nth-child(5),
+.disability-table td:nth-child(5) {
+    width: 150px;
+    white-space: normal;
+}
+
+.disability-table th:nth-child(6),
+.disability-table td:nth-child(6) {
+    width: 220px;
+    white-space: normal;
+}
+
+.disability-table th:nth-child(7),
+.disability-table td:nth-child(7) {
+    width: 100px;
+}
+
+.disability-table .table-input-slim {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.deworming-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+}
+
+.deworming-table th,
+.deworming-table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+}
+
+.deworming-table th:nth-child(1),
+.deworming-table td:nth-child(1) {
+    width: 13%;
+}
+
+.deworming-table th:nth-child(2),
+.deworming-table td:nth-child(2) {
+    width: 24%;
+}
+
+.deworming-table th:nth-child(3),
+.deworming-table td:nth-child(3) {
+    width: 18%;
+}
+
+.deworming-table th:nth-child(4),
+.deworming-table td:nth-child(4),
+.deworming-table th:nth-child(5),
+.deworming-table td:nth-child(5) {
+    width: 12%;
+}
+
+.deworming-table th:nth-child(6),
+.deworming-table td:nth-child(6) {
+    width: 21%;
+}
+
+.deworming-table .table-form-stack {
+    min-width: 0;
+}
+
+.deworming-table .table-input-slim {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.feeding-candidates-table,
+.feeding-recipients-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+}
+
+.feeding-candidates-table th,
+.feeding-candidates-table td,
+.feeding-recipients-table th,
+.feeding-recipients-table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+}
+
+.feeding-candidates-table th:nth-child(1),
+.feeding-candidates-table td:nth-child(1) {
+    width: 12%;
+}
+
+.feeding-candidates-table th:nth-child(2),
+.feeding-candidates-table td:nth-child(2),
+.feeding-recipients-table th:nth-child(1),
+.feeding-recipients-table td:nth-child(1) {
+    width: 18%;
+}
+
+.feeding-candidates-table th:nth-child(3),
+.feeding-candidates-table td:nth-child(3),
+.feeding-recipients-table th:nth-child(2),
+.feeding-recipients-table td:nth-child(2) {
+    width: 30%;
+}
+
+.feeding-candidates-table th:nth-child(4),
+.feeding-candidates-table td:nth-child(4),
+.feeding-recipients-table th:nth-child(3),
+.feeding-recipients-table td:nth-child(3) {
+    width: 24%;
+}
+
+.feeding-candidates-table th:nth-child(5),
+.feeding-candidates-table td:nth-child(5),
+.feeding-recipients-table th:nth-child(4),
+.feeding-recipients-table td:nth-child(4) {
+    width: 16%;
+}
+
+.feeding-recipients-table th:nth-child(5),
+.feeding-recipients-table td:nth-child(5) {
+    width: 14%;
+}
+
+.feeding-recipients-table th:nth-child(2),
+.feeding-recipients-table td:nth-child(2) {
+    width: 28%;
+}
+
+.feeding-recipients-table th:nth-child(3),
+.feeding-recipients-table td:nth-child(3) {
+    width: 22%;
+}
+
+.feeding-recipients-table th:nth-child(4),
+.feeding-recipients-table td:nth-child(4) {
+    width: 18%;
+}
+
+.health-report-table {
+    min-width: 1100px;
+    table-layout: auto;
+}
+
+.health-report-table th,
+.health-report-table td {
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.health-report-table th:nth-child(1),
+.health-report-table td:nth-child(1) {
+    min-width: 130px;
+}
+
+.health-report-table th:nth-child(2),
+.health-report-table td:nth-child(2) {
+    min-width: 240px;
+}
+
+.health-report-table th:nth-child(3),
+.health-report-table td:nth-child(3) {
+    min-width: 180px;
+}
+
+.health-report-table td:nth-child(5),
+.health-report-table td:nth-child(6) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.health-report-statistics {
+    margin: 14px 0;
+}
+
+.health-report-statistics h3 {
+    margin-bottom: 8px;
+    font-size: 1rem;
+}
+
+.health-report-statistics .table-shell {
+    max-width: 620px;
 }
 
 .report-card {
@@ -2243,6 +2767,10 @@ textarea:focus {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .health-snapshot-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .scan-mode-panel {
         flex-direction: column;
         align-items: stretch;
@@ -2394,6 +2922,7 @@ textarea:focus {
     }
 
     .detail-grid.wide,
+    .health-snapshot-grid,
     .summary-grid,
     .parent-summary-grid,
     .parent-month-summary-grid {
@@ -2496,6 +3025,34 @@ textarea:focus {
         border: 1px solid #d1d5db;
         border-radius: 0;
         box-shadow: none;
+    }
+
+    .sf2-report,
+    .sf2-table-shell {
+        overflow: visible !important;
+    }
+
+    .sf2-table {
+        width: 100% !important;
+        min-width: 0 !important;
+        table-layout: fixed !important;
+    }
+
+    .sf2-table col {
+        width: auto !important;
+    }
+
+    .sf2-table col:first-child {
+        width: 3% !important;
+    }
+
+    .sf2-table col:nth-child(2) {
+        width: 18% !important;
+    }
+
+    .sf2-table col:nth-last-child(1),
+    .sf2-table col:nth-last-child(2) {
+        width: 4% !important;
     }
 
     .records-table {

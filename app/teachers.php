@@ -48,7 +48,7 @@ function teacher_management_bootstrap(): void
     );
     $userStatement->execute([
         'username' => 'teacher_mabini',
-        'email' => 'teacher.mabini@projectpulse.local',
+        'email' => 'teacher.mabini@projectlink.local',
         'first_name' => 'Mabini',
         'middle_name' => 'Demo',
         'last_name' => 'Teacher',
@@ -781,6 +781,247 @@ function teacher_accessible_learner_by_lrn(int $userId, string $lrn): ?array
     $row = $statement->fetch();
 
     return $row === false ? null : $row;
+}
+
+function teacher_attendance_status_options(): array
+{
+    return [
+        'present' => [
+            'label' => 'Present',
+            'legend_code' => 'P',
+            'am_time_in' => '08:00:00',
+            'am_time_out' => '11:00:00',
+            'pm_time_in' => '13:00:00',
+            'pm_time_out' => '16:00:00',
+            'remarks' => 'Recorded by teacher',
+        ],
+        'absent' => [
+            'label' => 'Absent',
+            'legend_code' => 'A',
+            'remarks' => 'Full-day absence recorded by teacher',
+        ],
+        'am_absent' => [
+            'label' => 'AM Absent',
+            'legend_code' => 'A',
+            'pm_time_in' => '13:00:00',
+            'pm_time_out' => '16:00:00',
+            'remarks' => 'AM absence recorded by teacher',
+        ],
+        'pm_absent' => [
+            'label' => 'PM Absent',
+            'legend_code' => 'A',
+            'am_time_in' => '08:00:00',
+            'am_time_out' => '11:00:00',
+            'remarks' => 'PM absence recorded by teacher',
+        ],
+        'excused' => [
+            'label' => 'Excused',
+            'legend_code' => 'E',
+            'remarks' => 'Excused absence recorded by teacher',
+        ],
+    ];
+}
+
+function teacher_validate_attendance_status(string $statusKey): array
+{
+    $options = teacher_attendance_status_options();
+    $normalized = strtolower(trim($statusKey));
+
+    if (!array_key_exists($normalized, $options)) {
+        throw new RuntimeException('The selected attendance status is not supported.');
+    }
+
+    return $options[$normalized];
+}
+
+function teacher_section_attendance_for_date(int $teacherUserId, string $attendanceDate): array
+{
+    $statement = database()->prepare(
+        'SELECT
+            l.id AS learner_id,
+            al.code AS legend_code,
+            ar.am_time_in,
+            ar.am_time_out,
+            ar.pm_time_in,
+            ar.pm_time_out
+         FROM teacher_section_assignments tsa
+         INNER JOIN learner_enrollments le
+            ON le.section_id = tsa.section_id
+           AND le.school_year_id = tsa.school_year_id
+         INNER JOIN learners l ON l.id = le.learner_id
+         INNER JOIN attendance_records ar
+            ON ar.learner_enrollment_id = le.id
+           AND ar.attendance_date = :attendance_date
+         INNER JOIN attendance_legends al ON al.id = ar.legend_id
+         WHERE tsa.teacher_user_id = :teacher_user_id'
+    );
+    $statement->execute([
+        'attendance_date' => $attendanceDate,
+        'teacher_user_id' => $teacherUserId,
+    ]);
+
+    $statuses = [];
+    foreach ($statement->fetchAll() as $row) {
+        $statusKey = match (true) {
+            $row['legend_code'] === 'E' => 'excused',
+            $row['legend_code'] === 'A' && empty($row['am_time_in']) && !empty($row['pm_time_in']) => 'am_absent',
+            $row['legend_code'] === 'A' && !empty($row['am_time_in']) && empty($row['pm_time_in']) => 'pm_absent',
+            $row['legend_code'] === 'A' => 'absent',
+            default => 'present',
+        };
+        $statuses[(int) $row['learner_id']] = $statusKey;
+    }
+
+    return $statuses;
+}
+
+function teacher_record_section_attendance(int $teacherUserId, array $payload, string $attendanceDate): int
+{
+    $rawDates = (array) ($payload['attendance_dates'] ?? []);
+    if ($rawDates === []) {
+        $rawDates = [$attendanceDate];
+    }
+
+    $dates = [];
+    foreach ($rawDates as $rawDate) {
+        $date = trim((string) $rawDate);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !strtotime($date)) {
+            throw new RuntimeException('Each attendance date must be valid.');
+        }
+        $dates[$date] = $date;
+    }
+
+    $section = teacher_assigned_section($teacherUserId);
+    if ($section === null) {
+        throw new RuntimeException('You do not have an assigned section to record attendance for.');
+    }
+
+    $rawLearnerIds = array_values(array_map('strval', (array) ($payload['learner_ids'] ?? [])));
+    if ($rawLearnerIds === []) {
+        throw new RuntimeException('Select at least one learner to record attendance for.');
+    }
+
+    $postedStatuses = $payload['attendance_status'] ?? null;
+    if (!is_array($postedStatuses)) {
+        throw new RuntimeException('Attendance statuses were not submitted. Please refresh and try again.');
+    }
+
+    $learnerStatuses = [];
+    foreach ($rawLearnerIds as $learnerId) {
+        $learnerId = trim((string) $learnerId);
+        if ($learnerId === '') {
+            continue;
+        }
+
+        $statusKey = trim((string) ($postedStatuses[$learnerId] ?? ''));
+        if ($statusKey === '') {
+            throw new RuntimeException('Choose an attendance status for every learner before saving.');
+        }
+
+        $learnerStatuses[(int) $learnerId] = $statusKey;
+    }
+
+    if ($learnerStatuses === []) {
+        throw new RuntimeException('Attendance status is required for each selected learner.');
+    }
+
+    $pdo = database();
+    $legendStatement = $pdo->prepare(
+        'SELECT id, code
+         FROM attendance_legends
+         WHERE code = :code
+         LIMIT 1'
+    );
+
+    $enrollmentStatement = $pdo->prepare(
+        'SELECT id
+         FROM learner_enrollments
+         WHERE learner_id = :learner_id
+           AND section_id = :section_id
+           AND school_year_id = :school_year_id
+         LIMIT 1'
+    );
+
+    $recordStatement = $pdo->prepare(
+        'INSERT INTO attendance_records (
+            learner_enrollment_id,
+            attendance_date,
+            legend_id,
+            am_time_in,
+            am_time_out,
+            pm_time_in,
+            pm_time_out,
+            remarks
+         ) VALUES (
+            :learner_enrollment_id,
+            :attendance_date,
+            :legend_id,
+            :am_time_in,
+            :am_time_out,
+            :pm_time_in,
+            :pm_time_out,
+            :remarks
+         )
+         ON DUPLICATE KEY UPDATE
+            legend_id = VALUES(legend_id),
+            am_time_in = VALUES(am_time_in),
+            am_time_out = VALUES(am_time_out),
+            pm_time_in = VALUES(pm_time_in),
+            pm_time_out = VALUES(pm_time_out),
+            remarks = VALUES(remarks),
+            updated_at = CURRENT_TIMESTAMP'
+    );
+
+    $updatedCount = 0;
+    $pdo->beginTransaction();
+    try {
+        foreach ($learnerStatuses as $learnerId => $statusKey) {
+            $learner = teacher_accessible_learner($teacherUserId, $learnerId);
+            if ($learner === null) {
+                throw new RuntimeException('The selected learner is not part of your assigned section.');
+            }
+
+            $enrollmentStatement->execute([
+                'learner_id' => $learnerId,
+                'section_id' => (int) $section['id'],
+                'school_year_id' => (int) $section['school_year_id'],
+            ]);
+            $enrollment = $enrollmentStatement->fetch();
+            if ($enrollment === false) {
+                throw new RuntimeException('The learner is not currently enrolled in your assigned section.');
+            }
+
+            $status = teacher_validate_attendance_status($statusKey);
+            $legendStatement->execute(['code' => $status['legend_code']]);
+            $legend = $legendStatement->fetch();
+            if ($legend === false) {
+                throw new RuntimeException('The attendance legend for ' . $status['legend_code'] . ' is missing.');
+            }
+
+            foreach ($dates as $date) {
+                $recordStatement->execute([
+                    'learner_enrollment_id' => (int) $enrollment['id'],
+                    'attendance_date' => $date,
+                    'legend_id' => (int) $legend['id'],
+                    'am_time_in' => $status['am_time_in'] ?? null,
+                    'am_time_out' => $status['am_time_out'] ?? null,
+                    'pm_time_in' => $status['pm_time_in'] ?? null,
+                    'pm_time_out' => $status['pm_time_out'] ?? null,
+                    'remarks' => $status['remarks'] ?? null,
+                ]);
+
+                $updatedCount++;
+            }
+        }
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
+
+    return $updatedCount;
 }
 
 function teacher_update_learner_profile(int $teacherUserId, array $payload): void

@@ -52,13 +52,11 @@ function teacher_section_learner_sex_counts(array $learners): array
 
     foreach ($learners as $learner) {
         $sex = strtolower(trim((string) ($learner['sex'] ?? '')));
-
         if ($sex === 'male' || $sex === 'female') {
             $counts[$sex]++;
-            continue;
+        } else {
+            $counts['unspecified']++;
         }
-
-        $counts['unspecified']++;
     }
 
     return $counts;
@@ -185,6 +183,11 @@ $allowedModules = [
         'eyebrow' => 'Attendance',
         'title' => 'Section Attendance',
         'description' => 'Review and print the monthly SF2-style attendance register for your assigned section.',
+    ],
+    'record_attendance' => [
+        'eyebrow' => 'Attendance',
+        'title' => 'Record Attendance',
+        'description' => 'Manually record attendance for multiple learners and dates.',
     ],
     'learner_profiles' => [
         'eyebrow' => 'Learner Profile',
@@ -321,6 +324,13 @@ if (is_post()) {
             redirect('teacher.php?module=announcements');
         }
 
+        if ($formAction === 'record_section_attendance') {
+            $attendanceDate = trim((string) ($_POST['attendance_date'] ?? date('Y-m-d')));
+            $updatedCount = teacher_record_section_attendance((int) $user['id'], $_POST, $attendanceDate);
+            flash_set('teacher_dashboard', 'Updated ' . $updatedCount . ' attendance record(s) successfully.');
+            redirect('teacher.php?module=record_attendance&attendance_date=' . urlencode($attendanceDate));
+        }
+
         if ($formAction === 'save_theme') {
             theme_colors_save((string) ($_POST['theme_key'] ?? ''));
             flash_set('teacher_settings', 'Theme saved successfully.');
@@ -358,28 +368,33 @@ if ($module === 'settings') {
     $activeThemeKey = theme_active_key();
 }
 
-$historicalSchoolYears = teacher_historical_school_years((int) $user['id']);
-$selectedGradeSchoolYearId = isset($_GET['grades_sy_id']) ? (int) $_GET['grades_sy_id'] : 0;
-
-if ($selectedGradeSchoolYearId === 0 && !empty($historicalSchoolYears)) {
-    $currentSectionSyLabel = $section['school_year_label'] ?? null;
-    $currentSyId = null;
-    if ($currentSectionSyLabel !== null) {
-        foreach ($historicalSchoolYears as $sy) {
-            if ($sy['label'] === $currentSectionSyLabel) {
-                $currentSyId = (int) $sy['id'];
-                break;
-            }
-        }
-    }
-    $selectedGradeSchoolYearId = $currentSyId ?? (int) ($historicalSchoolYears[0]['id'] ?? 0);
-}
+$selectedGradeSchoolYearId = $section === null ? 0 : (int) $section['school_year_id'];
 
 $sectionLearners = $section === null ? [] : teacher_section_learners((int) $user['id']);
 $attendanceMonth = trim((string) ($_GET['attendance_month'] ?? date('Y-m')));
 if (preg_match('/^\d{4}-\d{2}$/', $attendanceMonth) !== 1) {
     $attendanceMonth = date('Y-m');
 }
+$attendanceDate = trim((string) ($_GET['attendance_date'] ?? date('Y-m-d')));
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $attendanceDate) || strtotime($attendanceDate) === false) {
+    $attendanceDate = date('Y-m-d');
+}
+$attendanceStatusOptions = teacher_attendance_status_options();
+$recordAttendanceRows = $section === null ? [] : $sectionLearners;
+usort($recordAttendanceRows, static function (array $left, array $right): int {
+    $sexOrder = ['male' => 0, 'female' => 1];
+    $leftSex = $sexOrder[strtolower(trim((string) ($left['sex'] ?? '')))] ?? 2;
+    $rightSex = $sexOrder[strtolower(trim((string) ($right['sex'] ?? '')))] ?? 2;
+
+    if ($leftSex !== $rightSex) {
+        return $leftSex <=> $rightSex;
+    }
+
+    return strcasecmp((string) ($left['learner_name'] ?? ''), (string) ($right['learner_name'] ?? ''));
+});
+$recordedAttendanceStatuses = $section === null
+    ? []
+    : teacher_section_attendance_for_date((int) $user['id'], $attendanceDate);
 $sectionAttendanceReport = null;
 if ($module === 'section_attendance' && $section !== null) {
     $sectionAttendanceReport = attendance_report_monthly_summary([
@@ -388,6 +403,7 @@ if ($module === 'section_attendance' && $section !== null) {
         'report_month' => $attendanceMonth,
     ]);
 }
+
 $parentLinks = $section === null ? [] : teacher_section_parent_links((int) $user['id']);
 $gradeRows = $selectedGradeSchoolYearId > 0 ? grade_teacher_rows_for_school_year((int) $user['id'], $selectedGradeSchoolYearId) : [];
 $bmiRemarkRows = teacher_section_bmi_remarks_rows($sectionLearners);
@@ -427,21 +443,6 @@ $profileCompletedCount = count(array_filter(
     $sectionLearners,
     static fn (array $learner): bool => teacher_profile_is_complete($learner)
 ));
-$gradeLearners = [];
-$seenGradeLearnerIds = [];
-foreach ($gradeRows as $gradeRow) {
-    if (!in_array((int) $gradeRow['learner_id'], $seenGradeLearnerIds, true)) {
-        $gradeLearners[] = [
-            'id' => $gradeRow['learner_id'],
-            'learner_name' => $gradeRow['learner_name'],
-            'lrn' => $gradeRow['lrn'],
-        ];
-        $seenGradeLearnerIds[] = (int) $gradeRow['learner_id'];
-    }
-}
-$gradeLearnerIds = $seenGradeLearnerIds;
-
-$gradeLearnerCount = count($gradeLearnerIds);
 $gradeRecordCount = count($gradeRows);
 $sectionLearnerCount = count($sectionLearners);
 $sexCounts = teacher_section_learner_sex_counts($sectionLearners);
@@ -465,26 +466,6 @@ if ($module === 'dashboard') {
     $adminAnnouncements = announcement_list(['role' => 'admin', 'is_published' => 1]);
 }
 $ageReferenceLabel = teacher_format_date($ageReferenceDate, 'F j, Y');
-
-$selectedGradeLearnerId = isset($_GET['grade_learner_id']) ? (int) $_GET['grade_learner_id'] : 0;
-if ($selectedGradeLearnerId <= 0 && $gradeLearnerIds !== []) {
-    $selectedGradeLearnerId = $gradeLearnerIds[0];
-}
-
-$selectedGradeLearner = null;
-if ($selectedGradeLearnerId > 0) {
-    foreach ($gradeLearners as $learner) {
-        if ((int) $learner['id'] === $selectedGradeLearnerId) {
-            $selectedGradeLearner = $learner;
-            break;
-        }
-    }
-}
-
-$selectedGradeRows = [];
-if ($selectedGradeLearner !== null) {
-    $selectedGradeRows = array_values(array_filter($gradeRows, static fn (array $row): bool => (int) $row['learner_id'] === (int) $selectedGradeLearner['id']));
-}
 
 $selectedProfileLearnerId = isset($_GET['profile_learner_id']) ? (int) $_GET['profile_learner_id'] : 0;
 if ($selectedProfileLearnerId <= 0 && $sectionLearners !== []) {
@@ -576,7 +557,6 @@ $pageMeta = $allowedModules[$module];
                     <div class="menu-group">
                         <p class="menu-group-title">Attendance</p>
                         <a href="<?php echo escape(teacher_module_url('section_attendance')); ?>" class="submenu-link<?php echo $module === 'section_attendance' ? ' active' : ''; ?>">Section Attendance</a>
-                        <a href="<?php echo escape(route_url('face_enrollment.php')); ?>" class="submenu-link">Face Enrollment</a>
                     </div>
 
                     <div class="menu-group">
@@ -665,6 +645,10 @@ $pageMeta = $allowedModules[$module];
                                 <p>Your access is limited to this advisory class.</p>
                             </div>
 
+                            <div class="template-actions">
+                                <a href="<?php echo escape(teacher_module_url('record_attendance')); ?>" class="primary-button">Record Attendance</a>
+                            </div>
+
                             <dl class="detail-grid wide">
                                 <div>
                                     <dt>Grade Level</dt>
@@ -684,11 +668,6 @@ $pageMeta = $allowedModules[$module];
                                 </div>
                             </dl>
                         </article>
-                    </section>
-
-                    <!-- Charts Section - Now using teacher-chart-overview-grid for stretching -->
-                    <section class="teacher-overview-grid">
-                        <article class="teacher-panel-card">
                             <div class="panel-heading compact-heading">
                                 <h2>BMI Remarks</h2>
                                 <p>Health-measurement overview for your advisory section.</p>
@@ -1463,6 +1442,96 @@ $pageMeta = $allowedModules[$module];
                         </article>
                     <?php endif; ?>
 
+                <?php elseif ($module === 'record_attendance'): ?>
+                    <?php if ($section === null): ?>
+                        <div class="alert neutral">No section is assigned to your account yet.</div>
+                    <?php elseif ($recordAttendanceRows === []): ?>
+                        <div class="alert neutral">No learners are assigned to your section yet.</div>
+                    <?php else: ?>
+                        <article class="teacher-panel-card">
+                            <form method="post" class="teacher-form-grid teacher-attendance-form">
+                                <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                <input type="hidden" name="form_action" value="record_section_attendance">
+                                <input type="hidden" name="attendance_date" value="<?php echo escape($attendanceDate); ?>">
+
+                                <div class="teacher-form-grid-full">
+                                    <div class="panel-heading compact-heading">
+                                        <h2>Attendance for Selected Dates</h2>
+                                        <p>All learners start as Present. Change only the learners who were absent, half-day, or excused.</p>
+                                    </div>
+                                </div>
+
+                                <div class="teacher-form-grid-full">
+                                    <div id="attendance-date-list" class="teacher-form-grid">
+                                        <div>
+                                            <label for="attendance_date_1">Attendance date</label>
+                                            <input id="attendance_date_1" name="attendance_dates[]" type="date" value="<?php echo escape($attendanceDate); ?>" required>
+                                        </div>
+                                    </div>
+                                    <button type="button" id="add-attendance-date" class="secondary-link">Add another date</button>
+                                    <p class="import-note">The selected status for each learner will be applied to every date listed here.</p>
+                                </div>
+
+                                <div class="table-shell teacher-attendance-table-shell teacher-form-grid-full">
+                                    <table class="records-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Student</th>
+                                                <th>LRN</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($recordAttendanceRows as $learner): ?>
+                                                <tr>
+                                                    <td>
+                                                        <label class="table-inline-label">
+                                                            <input type="hidden" name="learner_ids[]" value="<?php echo escape((string) $learner['id']); ?>">
+                                                            <?php echo escape($learner['learner_name']); ?>
+                                                        </label>
+                                                    </td>
+                                                    <td><?php echo escape($learner['lrn']); ?></td>
+                                                    <td>
+                                                        <div class="attendance-status-options" role="radiogroup" aria-label="Attendance status for <?php echo escape($learner['learner_name']); ?>">
+                                                            <?php foreach ($attendanceStatusOptions as $statusKey => $statusMeta): ?>
+                                                                <?php $statusInputId = 'attendance_' . $learner['id'] . '_' . $statusKey; ?>
+                                                                <label class="attendance-status-option" for="<?php echo escape($statusInputId); ?>">
+                                                                    <input id="<?php echo escape($statusInputId); ?>" type="radio" name="attendance_status[<?php echo escape((string) $learner['id']); ?>]" value="<?php echo escape($statusKey); ?>"<?php echo ($recordedAttendanceStatuses[(int) $learner['id']] ?? 'present') === $statusKey ? ' checked' : ''; ?> required>
+                                                                    <span><?php echo escape($statusMeta['label']); ?></span>
+                                                                </label>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="teacher-form-grid-full learner-form-actions">
+                                    <button type="submit" class="primary-button">Save Attendance</button>
+                                </div>
+                            </form>
+                        </article>
+                        <script>
+                            (() => {
+                                const dateList = document.getElementById('attendance-date-list');
+                                const addDateButton = document.getElementById('add-attendance-date');
+                                let dateNumber = 1;
+
+                                addDateButton?.addEventListener('click', () => {
+                                    dateNumber += 1;
+                                    const field = document.createElement('div');
+                                    field.innerHTML = `
+                                        <label for="attendance_date_${dateNumber}">Additional date</label>
+                                        <input id="attendance_date_${dateNumber}" name="attendance_dates[]" type="date" required>
+                                    `;
+                                    dateList.appendChild(field);
+                                });
+                            })();
+                        </script>
+                    <?php endif; ?>
+
                 <?php elseif ($module === 'grades_import'): ?>
                     <article class="teacher-panel-card">
                         <div class="panel-heading">
@@ -1489,191 +1558,6 @@ $pageMeta = $allowedModules[$module];
                         </form>
                     </article>
 
-                    <article class="teacher-panel-card">
-                        <div class="panel-heading compact-heading">
-                            <h2>Imported Grades</h2>
-                            <p>Review the grade records currently stored for your assigned learners.</p>
-                        </div>
-
-                        <form method="get" class="report-filter-grid" style="margin-bottom: 1.5rem;">
-                            <input type="hidden" name="module" value="grades_import">
-
-                            <div class="report-filter-field report-filter-field-wide">
-                                <label for="grades_sy_id">School Year</label>
-                                <select id="grades_sy_id" name="grades_sy_id">
-                                    <?php if ($historicalSchoolYears === []): ?>
-                                        <option value="">No historical data found</option>
-                                    <?php else: ?>
-                                        <?php foreach ($historicalSchoolYears as $sy): ?>
-                                            <option value="<?php echo escape((string) $sy['id']); ?>"<?php echo $selectedGradeSchoolYearId === (int) $sy['id'] ? ' selected' : ''; ?>>
-                                                <?php echo escape($sy['label']); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </select>
-                            </div>
-
-                            <div class="report-actions">
-                                <button type="submit" class="primary-button">View Grades</button>
-                            </div>
-                        </form>
-
-                        <div class="table-shell">
-                            <table class="records-table report-table">
-                                <thead>
-                                    <tr>
-                                        <th>LRN</th>
-                                        <th>Learner</th>
-                                        <th>School Year</th>
-                                        <th>Grade</th>
-                                        <th>Subject</th>
-                                        <th>Q1</th>
-                                        <th>Q2</th>
-                                        <?php if ($usesSeniorGradeLayout): ?>
-                                            <th>1st Sem Avg</th>
-                                        <?php endif; ?>
-                                        <th>Q3</th>
-                                        <th>Q4</th>
-                                        <?php if ($usesSeniorGradeLayout): ?>
-                                            <th>2nd Sem Avg</th>
-                                        <?php else: ?>
-                                            <th>Average</th>
-                                        <?php endif; ?>
-                                        <th>Final Avg</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if ($gradeRows === []): ?>
-                                        <tr>
-                                            <td colspan="<?php echo $usesSeniorGradeLayout ? '12' : '11'; ?>" class="empty-row">No grade records have been imported for this section yet.</td>
-                                        </tr>
-                                    <?php else: ?>
-                                        <?php foreach ($gradeRows as $gradeRow): ?>
-                                            <tr>
-                                                <td><?php echo escape($gradeRow['lrn']); ?></td>
-                                                <td><?php echo escape($gradeRow['learner_name']); ?></td>
-                                                <td><?php echo escape($gradeRow['school_year_label']); ?></td>
-                                                <td><?php echo escape($gradeRow['grade_level']); ?></td>
-                                                <td><?php echo escape($gradeRow['subject_name']); ?></td>
-                                                <td><?php echo escape($gradeRow['quarter_1_grade'] ?? '-'); ?></td>
-                                                <td><?php echo escape($gradeRow['quarter_2_grade'] ?? '-'); ?></td>
-                                                <?php if ($usesSeniorGradeLayout): ?>
-                                                    <td><?php echo escape($gradeRow['first_semester_average'] ?? '-'); ?></td>
-                                                <?php endif; ?>
-                                                <td><?php echo escape($gradeRow['quarter_3_grade'] ?? '-'); ?></td>
-                                                <td><?php echo escape($gradeRow['quarter_4_grade'] ?? '-'); ?></td>
-                                                <?php if ($usesSeniorGradeLayout): ?>
-                                                    <td><?php echo escape($gradeRow['second_semester_average'] ?? '-'); ?></td>
-                                                <?php else: ?>
-                                                    <?php $quarterAverage = grade_quarter_average($gradeRow); ?>
-                                                    <td><?php echo escape($quarterAverage !== null ? (string) $quarterAverage : '-'); ?></td>
-                                                <?php endif; ?>
-                                                <td><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </article>
-
-                    <article class="teacher-panel-card">
-                        <div class="panel-heading compact-heading">
-                            <h2>Select Learner</h2>
-                            <p>Open one learner to view the detailed imported grades.</p>
-                        </div>
-
-                        <form method="get" class="report-filter-grid">
-                            <input type="hidden" name="module" value="grades_import">
-
-                            <div class="report-filter-field report-filter-field-wide">
-                                <label for="grade_learner_id">Learner</label>
-                                <select id="grade_learner_id" name="grade_learner_id">
-                                    <?php foreach ($gradeLearners as $learner): ?>
-                                        <option value="<?php echo escape((string) $learner['id']); ?>"<?php echo $selectedGradeLearnerId === (int) $learner['id'] ? ' selected' : ''; ?>>
-                                            <?php echo escape($learner['learner_name'] . ' [' . $learner['lrn'] . ']'); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-
-                            <div class="report-actions">
-                                <button type="submit" class="primary-button">View Grades</button>
-                            </div>
-                        </form>
-                    </article>
-
-                    <article class="teacher-panel-card">
-                        <div class="panel-heading compact-heading">
-                            <h2>Learner Grade Detail</h2>
-                            <p>
-                                <?php if ($selectedGradeLearner !== null): ?>
-                                    <?php echo escape($selectedGradeLearner['learner_name'] . ' [' . $selectedGradeLearner['lrn'] . ']'); ?>
-                                <?php else: ?>
-                                    Select a learner to display grade details.
-                                <?php endif; ?>
-                            </p>
-                        </div>
-
-                        <?php if ($selectedGradeLearner === null): ?>
-                            <div class="alert neutral">No learner selected.</div>
-                        <?php elseif ($selectedGradeRows === []): ?>
-                            <div class="alert neutral">No grade records are available for this learner yet.</div>
-                        <?php else: ?>
-                            <div class="monthly-report-info">
-                                <p><strong>School Year:</strong> <?php echo escape($selectedGradeRows[0]['school_year_label']); ?></p>
-                                <p><strong>Grade:</strong> <?php echo escape($selectedGradeRows[0]['grade_level']); ?></p>
-                                <p><strong>Section:</strong> <?php echo escape($selectedGradeRows[0]['section_name']); ?></p>
-                                <p><strong>Grand Average:</strong> <?php $selectedGrandAverage = grade_average(array_column($selectedGradeRows, 'final_average')); echo escape($selectedGrandAverage !== null ? (string) $selectedGrandAverage : '-'); ?></p>
-                            </div>
-
-                            <div class="table-shell">
-                                <table class="records-table report-table">
-                                    <thead>
-                                    <tr>
-                                        <th>Subject</th>
-                                        <th>Q1</th>
-                                        <th>Q2</th>
-                                        <?php if ($usesSeniorGradeLayout): ?>
-                                            <th>1st Sem Avg</th>
-                                        <?php endif; ?>
-                                        <th>Q3</th>
-                                        <th>Q4</th>
-                                        <?php if ($usesSeniorGradeLayout): ?>
-                                            <th>2nd Sem Avg</th>
-                                        <?php else: ?>
-                                            <th>Average</th>
-                                        <?php endif; ?>
-                                        <th>Final Avg</th>
-                                        <th>Remarks</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    <?php foreach ($selectedGradeRows as $gradeRow): ?>
-                                        <tr>
-                                            <td><?php echo escape($gradeRow['subject_name']); ?></td>
-                                            <td><?php echo escape($gradeRow['quarter_1_grade'] ?? '-'); ?></td>
-                                            <td><?php echo escape($gradeRow['quarter_2_grade'] ?? '-'); ?></td>
-                                            <?php if ($usesSeniorGradeLayout): ?>
-                                                <td><?php echo escape($gradeRow['first_semester_average'] ?? '-'); ?></td>
-                                            <?php endif; ?>
-                                            <td><?php echo escape($gradeRow['quarter_3_grade'] ?? '-'); ?></td>
-                                            <td><?php echo escape($gradeRow['quarter_4_grade'] ?? '-'); ?></td>
-                                            <?php if ($usesSeniorGradeLayout): ?>
-                                                <td><?php echo escape($gradeRow['second_semester_average'] ?? '-'); ?></td>
-                                            <?php else: ?>
-                                                <?php $quarterAverage = grade_quarter_average($gradeRow); ?>
-                                                <td><?php echo escape($quarterAverage !== null ? (string) $quarterAverage : '-'); ?></td>
-                                            <?php endif; ?>
-                                            <td><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td>
-                                            <td><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        <?php endif; ?>
-                    </article>
                 <?php elseif ($module === 'learner_profiles'): ?>
                     <article class="teacher-panel-card">
                         <div class="panel-heading compact-heading">

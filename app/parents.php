@@ -18,7 +18,7 @@ function parent_portal_bootstrap(): void
     );
     $statement->execute([
         'username' => 'demo_parent',
-        'email' => 'parent@projectpulse.local',
+        'email' => 'parent@projectlink.local',
         'password_hash' => '$2y$10$bRKpueTjVab73zPzrBUyBe.3iRircjMowF66LfB1UuA/QZv4Vw9T.',
         'role' => 'parent',
         'is_active' => 1,
@@ -61,7 +61,7 @@ function parent_portal_bootstrap(): void
         'middle_name' => 'Santos',
         'last_name' => 'Dela Cruz',
         'contact_number' => '09171234567',
-        'address' => 'ProjectPulse Demo Household',
+        'address' => 'ProjectLink Demo Household',
     ]);
 
     $parentIdStatement = $pdo->prepare(
