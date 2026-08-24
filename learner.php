@@ -229,7 +229,7 @@ theme_settings_bootstrap();
                         </div>
                         <div class="detail-item">
                             <dt>Sex</dt>
-                            <dd><?php echo escape((string) ($profile['sex'] ?? '-')); ?></dd>
+                            <dd><?php echo escape(ucfirst((string) ($profile['sex'] ?? '-'))); ?></dd>
                         </div>
                         <div class="detail-item">
                             <dt>Mother Tongue</dt>
@@ -271,8 +271,8 @@ theme_settings_bootstrap();
                     <?php if ($adviser === null): ?>
                         <div class="alert neutral">No adviser is assigned to your current section.</div>
                     <?php else: ?>
-                        <strong><?php echo escape($adviser['adviser_name'] !== '' ? $adviser['adviser_name'] : $adviser['adviser_username']); ?></strong>
-                        <span><?php echo escape($adviser['adviser_email'] ?? ''); ?></span>
+                        <strong><?php echo escape($adviser['adviser_name'] !== '' ? $adviser['adviser_name'] : $adviser['adviser_username']); ?></strong><br>
+                        <small><span><?php echo escape($adviser['adviser_email'] ?? ''); ?></span></small>
                         <form method="post" class="message-form">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="send_adviser_message">

@@ -60,7 +60,7 @@ function report_filter_summary_items(array $filters, array $sections, array $lea
         $items['Month'] = $monthStamp === false ? $filters['report_month'] : date('F Y', $monthStamp);
     }
 
-    if (in_array($filters['report_type'], ['late_absence', 'attendance_logs'], true)) {
+    if ($filters['report_type'] === 'late_absence') {
         $items['Date Range'] = format_report_date($filters['date_from']) . ' to ' . format_report_date($filters['date_to']);
     }
 
@@ -594,10 +594,10 @@ if ($module === 'dashboard') {
                     COUNT(DISTINCT le.id) AS total_learners,
                     COUNT(DISTINCT CASE WHEN LOWER(l.sex) = \'male\' THEN le.id END) AS male_count,
                     COUNT(DISTINCT CASE WHEN LOWER(l.sex) = \'female\' THEN le.id END) AS female_count,
-                    COUNT(DISTINCT CASE WHEN DATE(asl.scanned_at) = CURDATE() THEN le.id END) AS scanned_learners
+                    COUNT(DISTINCT CASE WHEN ar.attendance_date = CURDATE() THEN le.id END) AS scanned_learners
                  FROM learner_enrollments le
                  INNER JOIN learners l ON l.id = le.learner_id
-                 LEFT JOIN attendance_scan_logs asl ON asl.learner_enrollment_id = le.id AND DATE(asl.scanned_at) = CURDATE()
+                 LEFT JOIN attendance_records ar ON ar.learner_enrollment_id = le.id AND ar.attendance_date = CURDATE()
                  WHERE le.school_year_id = :school_year_id
                    AND le.enrollment_status = \'enrolled\'
                    AND l.current_status = \'active\'
@@ -636,9 +636,9 @@ if ($module === 'dashboard') {
                 'SELECT
                     COUNT(*) AS today_logs,
                     COUNT(DISTINCT learner_enrollment_id) AS today_learners,
-                    MAX(scanned_at) AS last_scan
-                 FROM attendance_scan_logs
-                 WHERE DATE(scanned_at) = CURDATE()'
+                          MAX(updated_at) AS last_scan
+                      FROM attendance_records
+                      WHERE attendance_date = CURDATE()'
             );
             $statsRow = $statsStatement->fetch() ?: [];
             $stats['today_logs'] = (int) ($statsRow['today_logs'] ?? 0);
@@ -653,10 +653,12 @@ if ($module === 'dashboard') {
             $coverageStatement = database()->prepare(
                 'SELECT
                     COUNT(DISTINCT le.id) AS total_learners,
-                    COUNT(DISTINCT CASE WHEN DATE(asl.scanned_at) = CURDATE() THEN le.id END) AS scanned_learners
+                    COUNT(DISTINCT CASE WHEN ar.attendance_date = CURDATE() THEN le.id END) AS scanned_learners
                  FROM learner_enrollments le
                  INNER JOIN learners l ON l.id = le.learner_id
-                 LEFT JOIN attendance_scan_logs asl ON asl.learner_enrollment_id = le.id
+                                 LEFT JOIN attendance_records ar
+                                        ON ar.learner_enrollment_id = le.id
+                                     AND ar.attendance_date = CURDATE()
                  WHERE le.school_year_id = :school_year_id
                    AND le.enrollment_status = \'enrolled\'
                    AND l.current_status = \'active\''
@@ -697,38 +699,22 @@ if ($module === 'dashboard') {
             $statusStatement->execute(['school_year_id' => $syId]);
             $attendanceStatusRows = $statusStatement->fetchAll();
 
-            $hourStatement = database()->prepare(
-                'SELECT
-                    HOUR(asl.scanned_at) AS hour_value,
-                    DATE_FORMAT(asl.scanned_at, \'%l %p\') AS hour_label,
-                    COUNT(*) AS total
-                 FROM attendance_scan_logs asl
-                 INNER JOIN learner_enrollments le ON le.id = asl.learner_enrollment_id
-                 INNER JOIN learners l ON l.id = le.learner_id
-                 WHERE le.school_year_id = :school_year_id
-                   AND le.enrollment_status = \'enrolled\'
-                   AND l.current_status = \'active\'
-                   AND DATE(asl.scanned_at) = CURDATE()
-                 GROUP BY HOUR(asl.scanned_at), DATE_FORMAT(asl.scanned_at, \'%l %p\')
-                 ORDER BY hour_value ASC'
-            );
-            $hourStatement->execute(['school_year_id' => $syId]);
-            $attendanceHourRows = $hourStatement->fetchAll();
+                        $attendanceHourRows = [];
         }
 
         $logsStatement = database()->query(
             'SELECT
-                asl.scanned_at,
+                ar.updated_at AS recorded_at,
                 CONCAT(l.first_name, \' \', l.last_name) AS learner_name,
                 l.lrn,
                 CONCAT(le.grade_level, \' / \', COALESCE(s.name, \'Unassigned\')) AS grade_section,
-                CONCAT(asl.slot_label, \' recorded as \', al.label) AS log_entry
-             FROM attendance_scan_logs asl
-             INNER JOIN learner_enrollments le ON le.id = asl.learner_enrollment_id
+                     CONCAT(\'Teacher recorded as \', al.label) AS log_entry
+                 FROM attendance_records ar
+                 INNER JOIN learner_enrollments le ON le.id = ar.learner_enrollment_id
              INNER JOIN learners l ON l.id = le.learner_id
              LEFT JOIN sections s ON s.id = le.section_id
-             INNER JOIN attendance_legends al ON al.id = asl.legend_id
-             ORDER BY asl.scanned_at DESC, asl.id DESC
+             INNER JOIN attendance_legends al ON al.id = ar.legend_id
+             ORDER BY ar.updated_at DESC, ar.id DESC
              LIMIT 8'
         );
         $latestLogs = $logsStatement->fetchAll();
@@ -1938,16 +1924,12 @@ foreach ($attendanceGradeRows as $row) {
                                                 <th>Grade</th>
                                                 <th>Section</th>
                                                 <th>Status</th>
-                                                <th>AM In</th>
-                                                <th>AM Out</th>
-                                                <th>PM In</th>
-                                                <th>PM Out</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <?php if ($reportRows === []): ?>
                                                 <tr>
-                                                    <td colspan="10" class="empty-row">No attendance records matched the selected filters.</td>
+                                                    <td colspan="6" class="empty-row">No attendance records matched the selected filters.</td>
                                                 </tr>
                                             <?php else: ?>
                                                 <?php foreach ($reportRows as $row): ?>
@@ -1958,10 +1940,6 @@ foreach ($attendanceGradeRows as $row) {
                                                         <td><?php echo escape($row['grade_level']); ?></td>
                                                         <td><?php echo escape($row['section_name']); ?></td>
                                                         <td><span class="table-status"><?php echo escape($row['attendance_status']); ?></span></td>
-                                                        <td><?php echo escape(format_report_time($row['am_time_in'])); ?></td>
-                                                        <td><?php echo escape(format_report_time($row['am_time_out'])); ?></td>
-                                                        <td><?php echo escape(format_report_time($row['pm_time_in'])); ?></td>
-                                                        <td><?php echo escape(format_report_time($row['pm_time_out'])); ?></td>
                                                     </tr>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
@@ -2018,10 +1996,6 @@ foreach ($attendanceGradeRows as $row) {
                                             <tr>
                                                 <th>Date</th>
                                                 <th>Status</th>
-                                                <th>AM In</th>
-                                                <th>AM Out</th>
-                                                <th>PM In</th>
-                                                <th>PM Out</th>
                                                 <th>Grade</th>
                                                 <th>Section</th>
                                             </tr>
@@ -2029,17 +2003,13 @@ foreach ($attendanceGradeRows as $row) {
                                         <tbody>
                                             <?php if ($reportRows === []): ?>
                                                 <tr>
-                                                    <td colspan="8" class="empty-row">No learner attendance history matched the selected range.</td>
+                                                    <td colspan="4" class="empty-row">No learner attendance history matched the selected range.</td>
                                                 </tr>
                                             <?php else: ?>
                                                 <?php foreach ($reportRows as $row): ?>
                                                     <tr>
                                                         <td><?php echo escape(format_report_date($row['attendance_date'], 'Y-m-d')); ?></td>
                                                         <td><span class="table-status"><?php echo escape($row['attendance_status']); ?></span></td>
-                                                        <td><?php echo escape(format_report_time($row['am_time_in'])); ?></td>
-                                                        <td><?php echo escape(format_report_time($row['am_time_out'])); ?></td>
-                                                        <td><?php echo escape(format_report_time($row['pm_time_in'])); ?></td>
-                                                        <td><?php echo escape(format_report_time($row['pm_time_out'])); ?></td>
                                                         <td><?php echo escape($row['grade_level']); ?></td>
                                                         <td><?php echo escape($row['section_name']); ?></td>
                                                     </tr>
@@ -2077,43 +2047,6 @@ foreach ($attendanceGradeRows as $row) {
                                                         <td><?php echo escape((string) $row['late_count']); ?></td>
                                                         <td><?php echo escape((string) $row['absent_count']); ?></td>
                                                         <td><?php echo escape((string) $row['excused_count']); ?></td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                        </tbody>
-                                    </table>
-                                <?php else: ?>
-                                    <table class="records-table report-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Time</th>
-                                                <th>Slot</th>
-                                                <th>Status</th>
-                                                <th>Learner No.</th>
-                                                <th>LRN</th>
-                                                <th>Name</th>
-                                                <th>Grade</th>
-                                                <th>Section</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php if ($reportRows === []): ?>
-                                                <tr>
-                                                    <td colspan="9" class="empty-row">No attendance logs matched the selected range.</td>
-                                                </tr>
-                                            <?php else: ?>
-                                                <?php foreach ($reportRows as $row): ?>
-                                                    <tr>
-                                                        <td><?php echo escape(format_report_date($row['scanned_at'], 'Y-m-d')); ?></td>
-                                                        <td><?php echo escape(format_report_date($row['scanned_at'], 'h:i:s A')); ?></td>
-                                                        <td><?php echo escape($row['slot_label']); ?></td>
-                                                        <td><span class="table-status"><?php echo escape($row['attendance_status']); ?></span></td>
-                                                        <td><?php echo escape($row['learner_number']); ?></td>
-                                                        <td><?php echo escape($row['lrn']); ?></td>
-                                                        <td><?php echo escape($row['learner_name']); ?></td>
-                                                        <td><?php echo escape($row['grade_level']); ?></td>
-                                                        <td><?php echo escape($row['section_name']); ?></td>
                                                     </tr>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>

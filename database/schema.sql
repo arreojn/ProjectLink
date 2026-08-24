@@ -295,10 +295,6 @@ CREATE TABLE attendance_records (
     learner_enrollment_id INT UNSIGNED NOT NULL,
     attendance_date DATE NOT NULL,
     legend_id INT UNSIGNED NOT NULL,
-    am_time_in TIME NULL,
-    am_time_out TIME NULL,
-    pm_time_in TIME NULL,
-    pm_time_out TIME NULL,
     remarks VARCHAR(255) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -307,27 +303,6 @@ CREATE TABLE attendance_records (
         FOREIGN KEY (learner_enrollment_id) REFERENCES learner_enrollments(id)
         ON DELETE CASCADE,
     CONSTRAINT fk_attendance_legend
-        FOREIGN KEY (legend_id) REFERENCES attendance_legends(id)
-        ON DELETE RESTRICT
-);
-
-CREATE TABLE attendance_scan_logs (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    attendance_record_id INT UNSIGNED NOT NULL,
-    learner_enrollment_id INT UNSIGNED NOT NULL,
-    legend_id INT UNSIGNED NOT NULL,
-    slot_key ENUM('am_time_in', 'am_time_out', 'pm_time_in', 'pm_time_out') NOT NULL,
-    slot_label VARCHAR(30) NOT NULL,
-    scanned_at DATETIME NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_scan_log_slot (attendance_record_id, slot_key),
-    CONSTRAINT fk_scan_logs_record
-        FOREIGN KEY (attendance_record_id) REFERENCES attendance_records(id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_scan_logs_enrollment
-        FOREIGN KEY (learner_enrollment_id) REFERENCES learner_enrollments(id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_scan_logs_legend
         FOREIGN KEY (legend_id) REFERENCES attendance_legends(id)
         ON DELETE RESTRICT
 );
@@ -357,7 +332,7 @@ INSERT IGNORE INTO school_years (label, start_date, end_date, is_current) VALUES
 ('2026-2027', '2026-06-01', '2027-03-31', 1);
 
 INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES
-('attendance_scan_mode', 'strict_windows');
+('attendance_scan_mode', 'daily_scan');
 
 INSERT IGNORE INTO sections (name, grade_level, school_year_id, adviser_name)
 SELECT 'Mabini', 'Grade 7', sy.id, 'Adviser Demo'
@@ -493,87 +468,26 @@ INSERT IGNORE INTO attendance_records (
     learner_enrollment_id,
     attendance_date,
     legend_id,
-    am_time_in,
-    am_time_out,
-    pm_time_in,
-    pm_time_out,
     remarks
 )
 SELECT
     le.id,
     seeded.attendance_date,
     al.id,
-    seeded.am_time_in,
-    seeded.am_time_out,
-    seeded.pm_time_in,
-    seeded.pm_time_out,
     'Demo attendance seed'
 FROM learner_enrollments le
 INNER JOIN learners l ON l.id = le.learner_id
 INNER JOIN (
-    SELECT '2026-06-18' AS attendance_date, 'P' AS legend_code, '07:08:00' AS am_time_in, '11:58:00' AS am_time_out, '12:35:00' AS pm_time_in, '16:02:00' AS pm_time_out
+    SELECT '2026-06-18' AS attendance_date, 'P' AS legend_code
     UNION ALL
-    SELECT '2026-06-19', 'L', '07:26:00', '12:05:00', '12:36:00', '16:05:00'
+    SELECT '2026-06-19', 'L'
     UNION ALL
-    SELECT '2026-06-20', 'P', '07:11:00', '12:00:00', '12:34:00', '16:00:00'
+    SELECT '2026-06-20', 'P'
     UNION ALL
-    SELECT '2026-06-21', 'E', NULL, NULL, NULL, NULL
+    SELECT '2026-06-21', 'E'
     UNION ALL
-    SELECT '2026-06-22', 'P', '07:03:00', '12:02:00', '12:33:00', '15:58:00'
+    SELECT '2026-06-22', 'P'
 ) AS seeded
 INNER JOIN attendance_legends al ON al.code = seeded.legend_code
 WHERE l.lrn = '123456789012';
 
-INSERT INTO attendance_scan_logs (
-    attendance_record_id,
-    learner_enrollment_id,
-    legend_id,
-    slot_key,
-    slot_label,
-    scanned_at
-)
-SELECT
-    ar.id,
-    ar.learner_enrollment_id,
-    ar.legend_id,
-    seeded.slot_key,
-    seeded.slot_label,
-    seeded.scanned_at
-FROM attendance_records ar
-INNER JOIN learner_enrollments le ON le.id = ar.learner_enrollment_id
-INNER JOIN learners l ON l.id = le.learner_id
-INNER JOIN (
-    SELECT '2026-06-18' AS attendance_date, 'am_time_in' AS slot_key, 'AM time in' AS slot_label, '2026-06-18 07:08:00' AS scanned_at
-    UNION ALL
-    SELECT '2026-06-18', 'am_time_out', 'AM time out', '2026-06-18 11:58:00'
-    UNION ALL
-    SELECT '2026-06-18', 'pm_time_in', 'PM time in', '2026-06-18 12:35:00'
-    UNION ALL
-    SELECT '2026-06-18', 'pm_time_out', 'PM time out', '2026-06-18 16:02:00'
-    UNION ALL
-    SELECT '2026-06-19', 'am_time_in', 'AM time in', '2026-06-19 07:26:00'
-    UNION ALL
-    SELECT '2026-06-19', 'am_time_out', 'AM time out', '2026-06-19 12:05:00'
-    UNION ALL
-    SELECT '2026-06-19', 'pm_time_in', 'PM time in', '2026-06-19 12:36:00'
-    UNION ALL
-    SELECT '2026-06-19', 'pm_time_out', 'PM time out', '2026-06-19 16:05:00'
-    UNION ALL
-    SELECT '2026-06-20', 'am_time_in', 'AM time in', '2026-06-20 07:11:00'
-    UNION ALL
-    SELECT '2026-06-20', 'am_time_out', 'AM time out', '2026-06-20 12:00:00'
-    UNION ALL
-    SELECT '2026-06-20', 'pm_time_in', 'PM time in', '2026-06-20 12:34:00'
-    UNION ALL
-    SELECT '2026-06-20', 'pm_time_out', 'PM time out', '2026-06-20 16:00:00'
-    UNION ALL
-    SELECT '2026-06-22', 'am_time_in', 'AM time in', '2026-06-22 07:03:00'
-    UNION ALL
-    SELECT '2026-06-22', 'am_time_out', 'AM time out', '2026-06-22 12:02:00'
-    UNION ALL
-    SELECT '2026-06-22', 'pm_time_in', 'PM time in', '2026-06-22 12:33:00'
-    UNION ALL
-    SELECT '2026-06-22', 'pm_time_out', 'PM time out', '2026-06-22 15:58:00'
-) AS seeded
-    ON seeded.attendance_date = ar.attendance_date
-WHERE l.lrn = '123456789012';

@@ -160,11 +160,7 @@ function student_attendance_rows(int $learnerId, ?int $schoolYearId = null): arr
             ar.attendance_date,
             COALESCE(al.code, "") AS attendance_code,
             COALESCE(al.label, "No record") AS attendance_status,
-            COALESCE(al.counts_as_present, 0) AS counts_as_present,
-            ar.am_time_in,
-            ar.am_time_out,
-            ar.pm_time_in,
-            ar.pm_time_out
+            COALESCE(al.counts_as_present, 0) AS counts_as_present
          FROM learner_enrollments le
          LEFT JOIN attendance_records ar ON ar.learner_enrollment_id = le.id
          LEFT JOIN attendance_legends al ON al.id = ar.legend_id

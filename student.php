@@ -238,8 +238,6 @@ theme_settings_bootstrap();
                                 <tr>
                                     <th>Date</th>
                                     <th>Status</th>
-                                    <th>AM</th>
-                                    <th>PM</th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -247,8 +245,6 @@ theme_settings_bootstrap();
                                     <tr>
                                         <td><?php echo escape(student_portal_format_date($attendance['attendance_date'] ?? null, 'M d, Y')); ?></td>
                                         <td><?php echo escape((string) ($attendance['attendance_status'] ?? '-')); ?></td>
-                                        <td><?php echo escape((string) ($attendance['am_time_in'] ?? '-') . ' / ' . (string) ($attendance['am_time_out'] ?? '-')); ?></td>
-                                        <td><?php echo escape((string) ($attendance['pm_time_in'] ?? '-') . ' / ' . (string) ($attendance['pm_time_out'] ?? '-')); ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>

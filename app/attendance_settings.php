@@ -5,13 +5,9 @@ declare(strict_types=1);
 function attendance_scan_mode_options(): array
 {
     return [
-        'strict_windows' => [
-            'label' => 'Strict Time Windows',
-            'description' => 'Follows the configured AM and PM attendance windows.',
-        ],
-        'am_pm_sequence' => [
-            'label' => 'AM/PM Sequence',
-            'description' => 'First scan is time in and second scan is time out within the current half-day.',
+        'daily_scan' => [
+            'label' => 'Daily Attendance Scan',
+            'description' => 'Records one attendance scan per learner per day.',
         ],
     ];
 }
@@ -25,6 +21,37 @@ function attendance_settings_bootstrap(): void
     }
 
     $pdo = database();
+    $timeColumns = ['am_time_in', 'am_time_out', 'pm_time_in', 'pm_time_out'];
+    foreach ($timeColumns as $column) {
+        $columnStatement = $pdo->prepare(
+            'SELECT COUNT(*)
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = :schema_name
+               AND TABLE_NAME = \'attendance_records\'
+               AND COLUMN_NAME = :column_name'
+        );
+        $columnStatement->execute([
+            'schema_name' => DB_NAME,
+            'column_name' => $column,
+        ]);
+
+        if ((int) $columnStatement->fetchColumn() > 0) {
+            $pdo->exec('ALTER TABLE attendance_records DROP COLUMN `' . $column . '`');
+        }
+    }
+
+    $scanLogsTableStatement = $pdo->prepare(
+        'SELECT COUNT(*)
+         FROM INFORMATION_SCHEMA.TABLES
+         WHERE TABLE_SCHEMA = :schema_name
+           AND TABLE_NAME = \'attendance_scan_logs\''
+    );
+    $scanLogsTableStatement->execute(['schema_name' => DB_NAME]);
+
+    if ((int) $scanLogsTableStatement->fetchColumn() > 0) {
+        $pdo->exec('DROP TABLE attendance_scan_logs');
+    }
+
     $pdo->exec(
         'CREATE TABLE IF NOT EXISTS system_settings (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -37,11 +64,14 @@ function attendance_settings_bootstrap(): void
 
     $statement = $pdo->prepare(
         'INSERT IGNORE INTO system_settings (setting_key, setting_value)
-         VALUES (:setting_key, :setting_value)'
+         VALUES (:setting_key, :setting_value)
+         ON DUPLICATE KEY UPDATE
+            setting_value = VALUES(setting_value),
+            updated_at = CURRENT_TIMESTAMP'
     );
     $statement->execute([
         'setting_key' => 'attendance_scan_mode',
-        'setting_value' => 'strict_windows',
+        'setting_value' => 'daily_scan',
     ]);
 
     $bootstrapped = true;
@@ -51,7 +81,7 @@ function attendance_scan_mode_normalize(string $mode): string
 {
     $options = attendance_scan_mode_options();
 
-    return array_key_exists($mode, $options) ? $mode : 'strict_windows';
+    return array_key_exists($mode, $options) ? $mode : 'daily_scan';
 }
 
 function attendance_scan_mode_details(?string $mode = null): array
@@ -79,7 +109,7 @@ function attendance_scan_mode(): string
     $statement->execute(['setting_key' => 'attendance_scan_mode']);
     $row = $statement->fetch();
 
-    return attendance_scan_mode_normalize((string) ($row['setting_value'] ?? 'strict_windows'));
+    return attendance_scan_mode_normalize((string) ($row['setting_value'] ?? 'daily_scan'));
 }
 
 function attendance_scan_mode_set(string $mode): array
@@ -112,29 +142,17 @@ function attendance_can_manage_scan_mode(array $user): bool
     return ($user['role'] ?? '') === 'admin';
 }
 
-/**
- * Derive the reportable attendance result from a learner's four daily scans.
- * Excused records are entered manually and are never replaced by scan rules.
- */
 function attendance_record_summary(
     ?string $attendanceDate,
-    ?string $attendanceCode,
-    ?string $amTimeIn,
-    ?string $amTimeOut,
-    ?string $pmTimeIn,
-    ?string $pmTimeOut
+    ?string $attendanceCode
 ): array {
-    $amComplete = !empty($amTimeIn) && !empty($amTimeOut);
-    $pmComplete = !empty($pmTimeIn) && !empty($pmTimeOut);
-    $presentUnits = ($amComplete ? 0.5 : 0.0) + ($pmComplete ? 0.5 : 0.0);
-
-    if ($presentUnits >= 1.0) {
+    if ($attendanceCode === 'P' || $attendanceCode === 'L') {
         return [
-            'code' => 'P',
-            'label' => 'Present',
+            'code' => $attendanceCode,
+            'label' => $attendanceCode === 'L' ? 'Late' : 'Present',
             'present_units' => 1.0,
             'absent_units' => 0.0,
-            'is_late' => false,
+            'is_late' => $attendanceCode === 'L',
         ];
     }
 
@@ -145,75 +163,31 @@ function attendance_record_summary(
         ];
     }
 
-    $absentUnits = 1.0 - $presentUnits;
-    $label = $absentUnits === 0.5 ? 'Absent (0.5)' : 'Absent';
-
     return [
-        'code' => 'A', 'label' => $label, 'present_units' => $presentUnits, 'absent_units' => $absentUnits, 'is_late' => false,
+        'code' => $attendanceCode ?: 'A',
+        'label' => $attendanceCode === 'E' ? 'Excused' : 'Absent',
+        'present_units' => 0.0,
+        'absent_units' => 1.0,
+        'is_late' => false,
     ];
 }
 
 function attendance_scan_windows(): array
 {
-    return [
-        ['range' => '5:00 AM to 9:00 AM', 'label' => 'AM Time In'],
-        ['range' => '11:00 AM to 12:30 PM', 'label' => 'AM Time Out'],
-        ['range' => '12:31 PM to 2:00 PM', 'label' => 'PM Time In'],
-        ['range' => '3:00 PM onward', 'label' => 'PM Time Out'],
-    ];
+    return [['range' => 'Any time', 'label' => 'Daily attendance scan']];
 }
 
 function attendance_strict_scan_slot_for_time(string $currentTime): ?array
 {
-    if ($currentTime >= '05:00:00' && $currentTime <= '09:00:00') {
-        return ['column' => 'am_time_in', 'label' => 'AM time in'];
-    }
-
-    if ($currentTime >= '11:00:00' && $currentTime <= '12:30:00') {
-        return ['column' => 'am_time_out', 'label' => 'AM time out'];
-    }
-
-    if ($currentTime >= '12:31:00' && $currentTime <= '14:00:00') {
-        return ['column' => 'pm_time_in', 'label' => 'PM time in'];
-    }
-
-    if ($currentTime >= '15:00:00') {
-        return ['column' => 'pm_time_out', 'label' => 'PM time out'];
-    }
-
-    return null;
+    return ['column' => 'daily_scan', 'label' => 'Daily attendance scan'];
 }
 
 function attendance_sequence_scan_slot(string $currentTime, array $record): array
 {
-    if ($currentTime < '12:00:00') {
-        if (empty($record['am_time_in'])) {
-            return ['success' => true, 'column' => 'am_time_in', 'label' => 'AM time in'];
-        }
-
-        if (empty($record['am_time_out'])) {
-            return ['success' => true, 'column' => 'am_time_out', 'label' => 'AM time out'];
-        }
-
-        return [
-            'success' => false,
-            'status' => 409,
-            'message' => 'AM attendance has already been completed for today.',
-        ];
-    }
-
-    if (empty($record['pm_time_in'])) {
-        return ['success' => true, 'column' => 'pm_time_in', 'label' => 'PM time in'];
-    }
-
-    if (empty($record['pm_time_out'])) {
-        return ['success' => true, 'column' => 'pm_time_out', 'label' => 'PM time out'];
-    }
-
     return [
-        'success' => false,
-        'status' => 409,
-        'message' => 'PM attendance has already been completed for today.',
+        'success' => true,
+        'column' => 'daily_scan',
+        'label' => 'Daily attendance scan',
     ];
 }
 
@@ -221,15 +195,5 @@ function attendance_resolve_scan_slot(string $mode, string $currentTime, array $
 {
     $normalizedMode = attendance_scan_mode_normalize($mode);
 
-    if ($normalizedMode === 'am_pm_sequence') {
-        return attendance_sequence_scan_slot($currentTime, $record);
-    }
-
-    $slot = attendance_strict_scan_slot_for_time($currentTime);
-
-    if ($slot === null) {
-        return attendance_sequence_scan_slot($currentTime, $record);
-    }
-
-    return array_merge(['success' => true], $slot);
+    return attendance_strict_scan_slot_for_time($currentTime);
 }

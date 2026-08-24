@@ -13,11 +13,7 @@ function attendance_report_apply_summary(array $row, ?string $fallbackDate = nul
 
     $summary = attendance_record_summary(
         $attendanceDate !== '' ? $attendanceDate : null,
-        (string) ($row['attendance_code'] ?? ''),
-        $row['am_time_in'] ?? null,
-        $row['am_time_out'] ?? null,
-        $row['pm_time_in'] ?? null,
-        $row['pm_time_out'] ?? null
+        (string) ($row['attendance_code'] ?? '')
     );
 
     $row['attendance_code'] = $summary['code'];
@@ -65,7 +61,6 @@ function attendance_report_type_options(): array
         'section_attendance' => 'Section Attendance Report',
         'learner_history' => 'Learner Attendance History',
         'late_absence' => 'Late and Absence Report',
-        'attendance_logs' => 'Attendance Log Report',
     ];
 }
 
@@ -207,10 +202,6 @@ function attendance_report_meta(string $reportType): array
             'title' => 'Late and Absence Report', 'description' => 'Learners with late, absent, or excused records in the selected range.',
             'filters' => ['date_range', 'section_id', 'learner_id'], 'is_selected' => true,
         ]),
-        'attendance_logs' => array_merge($defaults, [
-            'title' => 'Attendance Log Report', 'description' => 'Raw attendance scan entries for auditing and troubleshooting.',
-            'filters' => ['date_range', 'section_id', 'learner_id'], 'is_selected' => true,
-        ]),
         default => $defaults,
     };
 }
@@ -242,7 +233,6 @@ function attendance_report_data(array $filters): array
         'section_attendance' => 'attendance_report_section',
         'learner_history' => 'attendance_report_learner_history',
         'late_absence' => 'attendance_report_late_absence',
-        'attendance_logs' => 'attendance_report_logs',
     ];
     $reportFunction = $reportFunctionMap[$reportType] ?? '';
     $reportData = function_exists($reportFunction) ? $reportFunction($filters) : ['rows' => []];
@@ -273,11 +263,7 @@ function attendance_report_daily(array $filters): array
             le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name,
             ar.attendance_date,
-            COALESCE(al.code, \'\') AS attendance_code,
-            ar.am_time_in,
-            ar.am_time_out,
-            ar.pm_time_in,
-            ar.pm_time_out
+            COALESCE(al.code, \'\') AS attendance_code
          FROM learner_enrollments le
          INNER JOIN learners l ON l.id = le.learner_id
          LEFT JOIN sections s ON s.id = le.section_id
@@ -324,10 +310,6 @@ function attendance_report_monthly_summary(array $filters): array
             COALESCE(s.name, \'Unassigned\') AS section_name,
             ar.attendance_date,
             COALESCE(al.code, \'\') AS attendance_code,
-            ar.am_time_in,
-            ar.am_time_out,
-            ar.pm_time_in,
-            ar.pm_time_out
          FROM learner_enrollments le
          INNER JOIN learners l ON l.id = le.learner_id
          LEFT JOIN sections s ON s.id = le.section_id
@@ -429,10 +411,6 @@ function attendance_report_section(array $filters): array
             CONCAT(l.last_name, \', \', l.first_name) AS learner_name,
             ar.attendance_date,
             COALESCE(al.code, \'\') AS attendance_code,
-            ar.am_time_in,
-            ar.am_time_out,
-            ar.pm_time_in,
-            ar.pm_time_out
          FROM learner_enrollments le
          INNER JOIN learners l ON l.id = le.learner_id
          LEFT JOIN sections s ON s.id = le.section_id
@@ -476,12 +454,6 @@ function attendance_report_learner_history(array $filters): array
         'SELECT
             ar.attendance_date,
             COALESCE(al.code, \'\') AS attendance_code,
-            ar.am_time_in,
-            ar.am_time_out,
-            ar.pm_time_in,
-            ar.pm_time_out,
-            CONCAT(l.last_name, \', \', l.first_name) AS learner_name,
-            le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name
          FROM learner_enrollments le
          INNER JOIN learners l ON l.id = le.learner_id
@@ -523,10 +495,6 @@ function attendance_report_late_absence(array $filters): array
             COALESCE(s.name, \'Unassigned\') AS section_name,
             ar.attendance_date,
             al.code AS attendance_code,
-            ar.am_time_in,
-            ar.am_time_out,
-            ar.pm_time_in,
-            ar.pm_time_out
          FROM learner_enrollments le
          INNER JOIN learners l ON l.id = le.learner_id
          LEFT JOIN sections s ON s.id = le.section_id
@@ -575,37 +543,3 @@ function attendance_report_late_absence(array $filters): array
     return ['rows' => $rows];
 }
 
-function attendance_report_logs(array $filters): array
-{
-    $schoolYear = require_current_school_year();
-    $params = [
-        'school_year_id' => $schoolYear['id'],
-        'date_from' => $filters['date_from'],
-        'date_to' => $filters['date_to'],
-    ];
-    $conditions = attendance_report_filter_conditions($filters, $params);
-
-    $statement = database()->prepare(
-        'SELECT
-            asl.scanned_at,
-            l.learner_number,
-            l.lrn,
-            CONCAT(l.last_name, \', \', l.first_name) AS learner_name,
-            le.grade_level,
-            COALESCE(s.name, \'Unassigned\') AS section_name,
-            asl.slot_label,
-            al.label AS attendance_status
-         FROM attendance_scan_logs asl
-         INNER JOIN learner_enrollments le ON le.id = asl.learner_enrollment_id
-         INNER JOIN learners l ON l.id = le.learner_id
-         LEFT JOIN sections s ON s.id = le.section_id
-         INNER JOIN attendance_legends al ON al.id = asl.legend_id
-         WHERE le.school_year_id = :school_year_id
-           AND DATE(asl.scanned_at) BETWEEN :date_from AND :date_to' .
-         ($conditions !== [] ? ' AND ' . implode(' AND ', $conditions) : '') . '
-         ORDER BY asl.scanned_at DESC, asl.id DESC'
-    );
-    $statement->execute($params);
-
-    return ['rows' => $statement->fetchAll()];
-}

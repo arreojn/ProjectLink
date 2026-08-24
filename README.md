@@ -1,6 +1,6 @@
 # Project LINK
 
-**Project LINK** (Learner Information Network and Knowledgebase) is a web-based **QR Code-enabled Integrated Learner Information and School Management System** designed to streamline school operations by centralizing learner information into a single, secure, and role-based platform.
+**Project LINK** (Learner Information Network and Knowledgebase) is a web-based **Integrated Learner Information and School Management System** designed to streamline school operations by centralizing learner information into a single, secure, and role-based platform.
 
 The system automates attendance monitoring, academic record management, health profiling, guidance services, and parent engagement while providing real-time reports that support evidence-based decision-making.
 
@@ -10,7 +10,7 @@ The system automates attendance monitoring, academic record management, health p
 
 ### Administrator Portal
 - Dashboard with real-time statistics
-- QR Code attendance monitoring
+- Teacher-recorded attendance monitoring
 - Learner Management
 - Teacher Management
 - User Account Management
@@ -86,12 +86,10 @@ The system automates attendance monitoring, academic record management, health p
 
 ## Core Modules
 
-### QR Code Attendance System
-- QR Code generation
-- QR Code scanning
-- AM/PM attendance
+### Teacher Attendance System
+- Daily attendance recording by teachers
 - Late detection
-- Attendance logs
+- Attendance reports
 - Attendance history
 
 ### Learner Information Management
@@ -116,7 +114,7 @@ The system automates attendance monitoring, academic record management, health p
 ## System Highlights
 
 - Integrated Learner Profile
-- QR Code Attendance Monitoring
+- Teacher Attendance Recording
 - Role-Based Access Control (RBAC)
 - Centralized Database
 - Real-Time Dashboard
@@ -146,8 +144,6 @@ The system automates attendance monitoring, academic record management, health p
 - MySQL / MariaDB
 
 ### Libraries and Tools
-- QR Code Generator
-- QR Code Scanner
 - Chart.js
 - DataTables
 - SweetAlert2
@@ -189,7 +185,7 @@ Only an active learner with an enrolled record for the current school year can a
 Project LINK aims to:
 
 - Centralize learner information into a unified digital platform.
-- Automate attendance monitoring using QR Code technology.
+- Record attendance directly by assigned teachers.
 - Improve administrative efficiency.
 - Support evidence-based decision-making.
 - Strengthen collaboration among administrators, teachers, parents, health coordinators, and guidance counselors.

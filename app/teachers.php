@@ -806,30 +806,12 @@ function teacher_attendance_status_options(): array
         'present' => [
             'label' => 'Present',
             'legend_code' => 'P',
-            'am_time_in' => '08:00:00',
-            'am_time_out' => '11:00:00',
-            'pm_time_in' => '13:00:00',
-            'pm_time_out' => '16:00:00',
             'remarks' => 'Recorded by teacher',
         ],
         'absent' => [
             'label' => 'Absent',
             'legend_code' => 'A',
             'remarks' => 'Full-day absence recorded by teacher',
-        ],
-        'am_absent' => [
-            'label' => 'AM Absent',
-            'legend_code' => 'A',
-            'pm_time_in' => '13:00:00',
-            'pm_time_out' => '16:00:00',
-            'remarks' => 'AM absence recorded by teacher',
-        ],
-        'pm_absent' => [
-            'label' => 'PM Absent',
-            'legend_code' => 'A',
-            'am_time_in' => '08:00:00',
-            'am_time_out' => '11:00:00',
-            'remarks' => 'PM absence recorded by teacher',
         ],
         'excused' => [
             'label' => 'Excused',
@@ -857,10 +839,7 @@ function teacher_section_attendance_for_date(int $teacherUserId, string $attenda
         'SELECT
             l.id AS learner_id,
             al.code AS legend_code,
-            ar.am_time_in,
-            ar.am_time_out,
-            ar.pm_time_in,
-            ar.pm_time_out
+            ar.attendance_date
          FROM teacher_section_assignments tsa
          INNER JOIN learner_enrollments le
             ON le.section_id = tsa.section_id
@@ -879,11 +858,9 @@ function teacher_section_attendance_for_date(int $teacherUserId, string $attenda
 
     $statuses = [];
     foreach ($statement->fetchAll() as $row) {
-        $statusKey = match (true) {
-            $row['legend_code'] === 'E' => 'excused',
-            $row['legend_code'] === 'A' && empty($row['am_time_in']) && !empty($row['pm_time_in']) => 'am_absent',
-            $row['legend_code'] === 'A' && !empty($row['am_time_in']) && empty($row['pm_time_in']) => 'pm_absent',
-            $row['legend_code'] === 'A' => 'absent',
+        $statusKey = match ($row['legend_code']) {
+            'E' => 'excused',
+            'A' => 'absent',
             default => 'present',
         };
         $statuses[(int) $row['learner_id']] = $statusKey;
@@ -964,27 +941,15 @@ function teacher_record_section_attendance(int $teacherUserId, array $payload, s
             learner_enrollment_id,
             attendance_date,
             legend_id,
-            am_time_in,
-            am_time_out,
-            pm_time_in,
-            pm_time_out,
             remarks
          ) VALUES (
             :learner_enrollment_id,
             :attendance_date,
             :legend_id,
-            :am_time_in,
-            :am_time_out,
-            :pm_time_in,
-            :pm_time_out,
             :remarks
          )
          ON DUPLICATE KEY UPDATE
             legend_id = VALUES(legend_id),
-            am_time_in = VALUES(am_time_in),
-            am_time_out = VALUES(am_time_out),
-            pm_time_in = VALUES(pm_time_in),
-            pm_time_out = VALUES(pm_time_out),
             remarks = VALUES(remarks),
             updated_at = CURRENT_TIMESTAMP'
     );
@@ -1020,10 +985,6 @@ function teacher_record_section_attendance(int $teacherUserId, array $payload, s
                     'learner_enrollment_id' => (int) $enrollment['id'],
                     'attendance_date' => $date,
                     'legend_id' => (int) $legend['id'],
-                    'am_time_in' => $status['am_time_in'] ?? null,
-                    'am_time_out' => $status['am_time_out'] ?? null,
-                    'pm_time_in' => $status['pm_time_in'] ?? null,
-                    'pm_time_out' => $status['pm_time_out'] ?? null,
                     'remarks' => $status['remarks'] ?? null,
                 ]);
 

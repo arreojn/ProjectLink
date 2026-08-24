@@ -256,10 +256,6 @@ function parent_child_month_attendance(int $userId, int $learnerId, string $repo
             COALESCE(al.code, \'\') AS attendance_code,
             COALESCE(al.label, \'No record\') AS attendance_status,
             COALESCE(al.counts_as_present, 0) AS counts_as_present,
-            ar.am_time_in,
-            ar.am_time_out,
-            ar.pm_time_in,
-            ar.pm_time_out,
             ar.remarks,
             le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name

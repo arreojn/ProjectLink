@@ -343,27 +343,19 @@ if ($selectedChild !== null) {
                                     <tr>
                                         <th>Date</th>
                                         <th>Status</th>
-                                        <th>AM In</th>
-                                        <th>AM Out</th>
-                                        <th>PM In</th>
-                                        <th>PM Out</th>
                                         <th>Remarks</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if ($attendanceRows === []): ?>
                                         <tr>
-                                            <td colspan="7" class="empty-row">No attendance records were found for the selected child and month.</td>
+                                            <td colspan="3" class="empty-row">No attendance records were found for the selected child and month.</td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($attendanceRows as $row): ?>
                                             <tr>
                                                 <td><?php echo escape(parent_portal_format_date($row['attendance_date'])); ?></td>
                                                 <td><span class="table-status"><?php echo escape($row['attendance_status']); ?></span></td>
-                                                <td><?php echo escape(parent_portal_format_time($row['am_time_in'])); ?></td>
-                                                <td><?php echo escape(parent_portal_format_time($row['am_time_out'])); ?></td>
-                                                <td><?php echo escape(parent_portal_format_time($row['pm_time_in'])); ?></td>
-                                                <td><?php echo escape(parent_portal_format_time($row['pm_time_out'])); ?></td>
                                                 <td><?php echo escape($row['remarks'] ?? '-'); ?></td>
                                             </tr>
                                         <?php endforeach; ?>

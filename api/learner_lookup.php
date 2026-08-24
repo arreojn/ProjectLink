@@ -70,11 +70,7 @@ if ($enrollment === false) {
 $attendanceStatement = database()->prepare(
     'SELECT
         ar.attendance_date,
-        al.code AS attendance_code,
-        ar.am_time_in,
-        ar.am_time_out,
-        ar.pm_time_in,
-        ar.pm_time_out
+        al.code AS attendance_code
      FROM attendance_records ar
      INNER JOIN attendance_legends al ON al.id = ar.legend_id
      WHERE ar.learner_enrollment_id = :enrollment_id
@@ -88,11 +84,7 @@ $attendanceStatement->execute([
 $attendance = $attendanceStatement->fetch() ?: null;
 $attendanceSummary = attendance_record_summary(
     $attendance['attendance_date'] ?? null,
-    $attendance['attendance_code'] ?? null,
-    $attendance['am_time_in'] ?? null,
-    $attendance['am_time_out'] ?? null,
-    $attendance['pm_time_in'] ?? null,
-    $attendance['pm_time_out'] ?? null
+    $attendance['attendance_code'] ?? null
 );
 
 $fullName = trim(implode(' ', array_filter([
@@ -110,9 +102,5 @@ echo json_encode([
         'section' => $enrollment['section_name'],
         'school_year' => $enrollment['school_year'],
         'attendance_status' => $attendance === null ? 'No record yet' : $attendanceSummary['label'],
-        'am_time_in' => $attendance['am_time_in'] ?? null,
-        'am_time_out' => $attendance['am_time_out'] ?? null,
-        'pm_time_in' => $attendance['pm_time_in'] ?? null,
-        'pm_time_out' => $attendance['pm_time_out'] ?? null,
     ],
 ]);

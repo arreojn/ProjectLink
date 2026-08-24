@@ -714,12 +714,12 @@ $pageMeta = $allowedModules[$module];
                         <article class="teacher-panel-card">
                             <div class="panel-heading">
                                 <h2>Assigned Section</h2>
-                                <p>Your access is limited to this advisory class.</p>
+                                
                             </div>
 
-                            <div class="template-actions">
+                            <!-- <div class="template-actions">
                                 <a href="<?php echo escape(teacher_module_url('record_attendance')); ?>" class="primary-button">Record Attendance</a>
-                            </div>
+                            </div> -->
 
                             <dl class="detail-grid wide">
                                 <div>
