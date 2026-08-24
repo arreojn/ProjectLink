@@ -112,6 +112,8 @@ function auth_bootstrap(): void
     auth_ensure_column('users', 'first_name', 'VARCHAR(100) NULL AFTER email');
     auth_ensure_column('users', 'middle_name', 'VARCHAR(100) NULL AFTER first_name');
     auth_ensure_column('users', 'last_name', 'VARCHAR(100) NULL AFTER middle_name');
+    auth_ensure_user_role('learner');
+    auth_ensure_user_role('student');
 
     database()->exec(
         'CREATE TABLE IF NOT EXISTS auth_login_logs (
@@ -280,10 +282,32 @@ function attempt_login(string $identity, string $password): bool
         'middle_name' => $user['middle_name'],
         'last_name' => $user['last_name'],
         'role' => $user['role'],
+        'must_change_password' => auth_requires_password_change($user),
     ];
     auth_log_login_attempt($identity, $user, true);
 
     return true;
+}
+
+function auth_find_user_by_identity(string $identity): ?array
+{
+    auth_bootstrap();
+    $identity = trim($identity);
+
+    if ($identity === '') {
+        return null;
+    }
+
+    $statement = database()->prepare(
+        'SELECT id, username, email, first_name, middle_name, last_name, role, is_active
+         FROM users
+         WHERE username = :identity OR email = :identity
+         LIMIT 1'
+    );
+    $statement->execute(['identity' => $identity]);
+    $user = $statement->fetch();
+
+    return $user === false ? null : $user;
 }
 
 function auth_change_password(int $userId, string $currentPassword, string $newPassword): void
@@ -339,6 +363,19 @@ function current_user(): ?array
     return $_SESSION['auth_user'];
 }
 
+function auth_requires_password_change(array $user): bool
+{
+    $role = strtolower(trim((string) ($user['role'] ?? '')));
+    $username = trim((string) ($user['username'] ?? ''));
+    $passwordHash = (string) ($user['password_hash'] ?? '');
+
+    if (($role !== 'learner' && $role !== 'student') || $username === '' || $passwordHash === '') {
+        return false;
+    }
+
+    return password_verify($username, $passwordHash);
+}
+
 function dashboard_path_for_role(?string $role): string
 {
     return match ($role) {
@@ -348,6 +385,8 @@ function dashboard_path_for_role(?string $role): string
         'guidance' => 'guidance.php',
         'teacher' => 'teacher.php',
         'parent' => 'parent.php',
+        'learner' => 'learner.php',
+        'student' => 'student.php',
         default => 'index.php',
     };
 }
@@ -366,6 +405,10 @@ function require_login(): array
 function require_roles(array $roles): array
 {
     $user = require_login();
+
+    if (!empty($user['must_change_password'])) {
+        redirect('change_password.php');
+    }
 
     if (!in_array($user['role'], $roles, true)) {
         redirect(dashboard_path_for_role($user['role'] ?? null));

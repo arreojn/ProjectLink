@@ -161,6 +161,8 @@ The system automates attendance monitoring, academic record management, health p
 - Health Coordinator
 - Guidance Counselor
 - Parent
+- Learner
+- Student
 
 ---
 
@@ -173,6 +175,12 @@ The system automates attendance monitoring, academic record management, health p
 - Activity Logs
 - Input Validation
 - Database Backup and Recovery
+
+## Learner Account Setup and Privacy
+
+Learner accounts are created or reset by an administrator from **Learner Accounts** or by an assigned teacher from **Learner Profile > Basic Profile**. The learner's 12-digit LRN is used as the temporary username and password. On first login, the learner must set a different password and is returned to the login screen.
+
+Only an active learner with an enrolled record for the current school year can access the learner portal. Each learner record can be linked to only one user account. Learner portal data is scoped through the authenticated learner link and includes profile, current-year grades, current-year attendance, and announcements. Health, disability, and guidance case information remains restricted to authorized staff and is not displayed in the learner portal.
 
 ---
 

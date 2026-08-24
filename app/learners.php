@@ -240,7 +240,8 @@ function learner_sections(): array
         'SELECT id, name, grade_level
          FROM sections
          WHERE school_year_id = :school_year_id
-         ORDER BY grade_level ASC, name ASC'
+            ORDER BY FIELD(grade_level, "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12"),
+                grade_level ASC, name ASC'
     );
     $statement->execute(['school_year_id' => $schoolYear['id']]);
 
@@ -269,6 +270,7 @@ function learner_list_filters(): array
         'status' => learner_normalize_status((string) ($_GET['status'] ?? '')),
         'grade_level' => trim((string) ($_GET['grade_level'] ?? '')),
         'section_id' => trim((string) ($_GET['section_id'] ?? '')),
+        'grade_section' => trim((string) ($_GET['grade_section'] ?? '')),
     ];
 }
 
@@ -290,12 +292,17 @@ function learner_list(array $filters): array
         $params['status'] = $filters['status'];
     }
 
-    if (!empty($filters['grade_level'])) {
+    $gradeSectionFilter = (string) ($filters['grade_section'] ?? '');
+    if (strncmp($gradeSectionFilter, 'grade:', 6) === 0) {
+        $conditions[] = 'COALESCE(le.grade_level, \'\') = :grade_section_level';
+        $params['grade_section_level'] = substr($gradeSectionFilter, 6);
+    } elseif (strncmp($gradeSectionFilter, 'section:', 8) === 0) {
+        $conditions[] = 'COALESCE(le.section_id, 0) = :grade_section_id';
+        $params['grade_section_id'] = (int) substr($gradeSectionFilter, 8);
+    } elseif (!empty($filters['grade_level'])) {
         $conditions[] = 'COALESCE(le.grade_level, \'\') = :grade_level';
         $params['grade_level'] = $filters['grade_level'];
-    }
-
-    if (!empty($filters['section_id'])) {
+    } elseif (!empty($filters['section_id'])) {
         $conditions[] = 'COALESCE(le.section_id, 0) = :section_id';
         $params['section_id'] = (int) $filters['section_id'];
     }
@@ -612,6 +619,271 @@ function learner_generate_number(): string
     $nextNumber = (int) ($row['max_number'] ?? 0) + 1;
 
     return 'LP-' . str_pad((string) $nextNumber, 4, '0', STR_PAD_LEFT);
+}
+
+function learner_account_for_lrn(string $lrn): ?array
+{
+    $statement = database()->prepare(
+        'SELECT
+            l.id,
+            l.lrn,
+            l.first_name,
+            l.middle_name,
+            l.last_name,
+            l.user_id,
+            u.id AS user_id_value,
+            u.username,
+            u.email,
+            u.password_hash,
+            u.role,
+            u.is_active
+         FROM learners l
+         LEFT JOIN users u ON u.id = l.user_id
+         WHERE l.lrn = :lrn
+         LIMIT 1'
+    );
+    $statement->execute(['lrn' => preg_replace('/\D+/', '', trim($lrn)) ?? trim($lrn)]);
+    $row = $statement->fetch();
+
+    return $row === false ? null : $row;
+}
+
+function learner_account_rows(?int $sectionId = null): array
+{
+    $schoolYear = require_current_school_year();
+    $conditions = ['1 = 1'];
+    $params = ['school_year_id' => (int) $schoolYear['id']];
+
+    if ($sectionId !== null && $sectionId > 0) {
+        $conditions[] = 'le.section_id = :section_id';
+        $params['section_id'] = $sectionId;
+    }
+
+    $statement = database()->prepare(
+        'SELECT
+            l.id,
+            l.lrn,
+            l.first_name,
+            l.middle_name,
+            l.last_name,
+            l.current_status,
+            l.user_id,
+            u.username,
+            u.email,
+                u.is_active AS account_is_active,
+                le.section_id,
+                COALESCE(s.name, \'Unassigned\') AS section_name
+         FROM learners l
+         LEFT JOIN users u ON u.id = l.user_id
+            LEFT JOIN learner_enrollments le
+                ON le.learner_id = l.id
+              AND le.school_year_id = :school_year_id
+            LEFT JOIN sections s ON s.id = le.section_id
+            WHERE ' . implode(' AND ', $conditions) . '
+            ORDER BY l.last_name ASC, l.first_name ASC, l.id ASC'
+    );
+     $statement->execute($params);
+
+    return $statement->fetchAll();
+}
+
+function learner_set_account_active(int $learnerId, bool $isActive): void
+{
+    $statement = database()->prepare(
+        'SELECT user_id
+         FROM learners
+         WHERE id = :id
+         LIMIT 1'
+    );
+    $statement->execute(['id' => $learnerId]);
+    $learner = $statement->fetch();
+
+    if ($learner === false || empty($learner['user_id'])) {
+        throw new RuntimeException('This learner does not have an activated account.');
+    }
+
+    $update = database()->prepare(
+        'UPDATE users
+         SET is_active = :is_active,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = :id'
+    );
+    $update->execute([
+        'is_active' => $isActive ? 1 : 0,
+        'id' => (int) $learner['user_id'],
+    ]);
+}
+
+function learner_activate_account(int $learnerId, string $username, string $password): void
+{
+    $learner = database()->prepare(
+        'SELECT id, lrn, first_name, middle_name, last_name, user_id, current_status
+         FROM learners
+         WHERE id = :id
+         LIMIT 1'
+    );
+    $learner->execute(['id' => $learnerId]);
+    $learnerRow = $learner->fetch();
+
+    if ($learnerRow === false) {
+        throw new RuntimeException('Learner record was not found.');
+    }
+
+    if ((string) ($learnerRow['current_status'] ?? '') !== 'active') {
+        throw new RuntimeException('Only active learners can have a portal account.');
+    }
+
+    $schoolYear = current_school_year();
+    if ($schoolYear === null) {
+        throw new RuntimeException('A current school year is required before activating a learner account.');
+    }
+
+    $enrollmentStatement = database()->prepare(
+        'SELECT id
+         FROM learner_enrollments
+         WHERE learner_id = :learner_id
+           AND school_year_id = :school_year_id
+           AND enrollment_status = \'enrolled\'
+         LIMIT 1'
+    );
+    $enrollmentStatement->execute([
+        'learner_id' => $learnerId,
+        'school_year_id' => (int) $schoolYear['id'],
+    ]);
+
+    if ($enrollmentStatement->fetch() === false) {
+        throw new RuntimeException('Only learners enrolled in the current school year can have a portal account.');
+    }
+
+    $lrn = preg_replace('/\D+/', '', trim((string) ($learnerRow['lrn'] ?? '')));
+    if ($lrn === '' || strlen($lrn) !== 12) {
+        throw new RuntimeException('The learner LRN must be valid before activating an account.');
+    }
+
+    $normalizedUsername = trim((string) $username);
+    if ($normalizedUsername === '') {
+        $normalizedUsername = $lrn;
+    }
+
+    $cleanPassword = trim((string) $password);
+    if ($cleanPassword === '') {
+        $cleanPassword = $lrn;
+    }
+
+    if (strtolower($normalizedUsername) !== strtolower($lrn)) {
+        $normalizedUsername = $lrn;
+    }
+
+    if ($cleanPassword !== $lrn) {
+        $cleanPassword = $lrn;
+    }
+
+    $pdo = database();
+    $pdo->beginTransaction();
+
+    try {
+        $statement = $pdo->prepare(
+            'SELECT id
+             FROM users
+             WHERE username = :username
+             LIMIT 1'
+        );
+        $statement->execute(['username' => $normalizedUsername]);
+        $existingUser = $statement->fetch();
+
+        if ($existingUser !== false && (int) $existingUser['id'] !== (int) ($learnerRow['user_id'] ?? 0)) {
+            $linkedLearnerStatement = $pdo->prepare(
+                'SELECT id
+                 FROM learners
+                 WHERE user_id = :user_id
+                 LIMIT 1'
+            );
+            $linkedLearnerStatement->execute(['user_id' => (int) $existingUser['id']]);
+
+            if ($linkedLearnerStatement->fetch() !== false) {
+                throw new RuntimeException('A learner account with this LRN already exists.');
+            }
+
+            $orphanUsername = 'orphan_' . (int) $existingUser['id'] . '_' . $lrn;
+            $orphanStatement = $pdo->prepare(
+                'UPDATE users
+                 SET username = :username,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id'
+            );
+            $orphanStatement->execute([
+                'username' => $orphanUsername,
+                'id' => (int) $existingUser['id'],
+            ]);
+            $existingUser = ['id' => (int) ($learnerRow['user_id'] ?? 0)];
+        }
+
+        if ($existingUser === false) {
+            $insertStatement = $pdo->prepare(
+                'INSERT INTO users (username, email, first_name, middle_name, last_name, password_hash, role, is_active)
+                 VALUES (:username, :email, :first_name, :middle_name, :last_name, :password_hash, :role, :is_active)'
+            );
+            $insertStatement->execute([
+                'username' => $normalizedUsername,
+                'email' => strtolower($normalizedUsername) . '@projectlink.local',
+                'first_name' => (string) ($learnerRow['first_name'] ?? ''),
+                'middle_name' => (string) ($learnerRow['middle_name'] ?? ''),
+                'last_name' => (string) ($learnerRow['last_name'] ?? ''),
+                'password_hash' => password_hash($cleanPassword, PASSWORD_DEFAULT),
+                'role' => 'learner',
+                'is_active' => 1,
+            ]);
+            $userId = (int) $pdo->lastInsertId();
+        } else {
+            $userId = (int) $existingUser['id'];
+            $passwordUpdate = $pdo->prepare(
+                'UPDATE users
+                 SET username = :username,
+                     first_name = :first_name,
+                     middle_name = :middle_name,
+                     last_name = :last_name,
+                     password_hash = :password_hash,
+                     role = :role,
+                     is_active = :is_active,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id'
+            );
+            $passwordUpdate->execute([
+                'username' => $normalizedUsername,
+                'first_name' => (string) ($learnerRow['first_name'] ?? ''),
+                'middle_name' => (string) ($learnerRow['middle_name'] ?? ''),
+                'last_name' => (string) ($learnerRow['last_name'] ?? ''),
+                'password_hash' => password_hash($cleanPassword, PASSWORD_DEFAULT),
+                'role' => 'learner',
+                'is_active' => 1,
+                'id' => $userId,
+            ]);
+        }
+
+        if (empty($learnerRow['user_id'])) {
+            $updateLearner = $pdo->prepare(
+                'UPDATE learners
+                 SET user_id = :user_id
+                 WHERE id = :id
+                   AND user_id IS NULL'
+            );
+            $updateLearner->execute([
+                'user_id' => $userId,
+                'id' => $learnerId,
+            ]);
+
+            if ($updateLearner->rowCount() === 0) {
+                throw new RuntimeException('This learner is already linked to another account.');
+            }
+        }
+
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
 }
 
 function learner_save(array $payload): void

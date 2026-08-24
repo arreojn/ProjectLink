@@ -286,7 +286,9 @@ function teacher_section_options(): array
          INNER JOIN school_years sy ON sy.id = s.school_year_id
          LEFT JOIN teacher_section_assignments tsa ON tsa.section_id = s.id
          LEFT JOIN users assigned_user ON assigned_user.id = tsa.teacher_user_id
-         ORDER BY sy.is_current DESC, sy.start_date DESC, s.grade_level ASC, s.name ASC'
+            ORDER BY sy.is_current DESC, sy.start_date DESC,
+                FIELD(s.grade_level, \'Grade 7\', \'Grade 8\', \'Grade 9\', \'Grade 10\', \'Grade 11\', \'Grade 12\'),
+                s.grade_level ASC, s.name ASC'
     );
 
     return $statement->fetchAll();
@@ -739,6 +741,8 @@ function teacher_accessible_learner(int $userId, int $learnerId): ?array
          LEFT JOIN sections s ON s.id = le.section_id
          WHERE tsa.teacher_user_id = :teacher_user_id
            AND l.id = :learner_id
+                     AND l.current_status = \'active\'
+                     AND le.enrollment_status = \'enrolled\'
          LIMIT 1'
     );
     $statement->execute([
@@ -748,6 +752,19 @@ function teacher_accessible_learner(int $userId, int $learnerId): ?array
     $row = $statement->fetch();
 
     return $row === false ? null : $row;
+}
+
+function teacher_activate_learner_account(int $teacherUserId, int $learnerId, string $username, string $password): void
+{
+    teacher_management_bootstrap();
+    learner_management_bootstrap();
+
+    $accessible = teacher_accessible_learner($teacherUserId, $learnerId);
+    if ($accessible === null) {
+        throw new RuntimeException('The selected learner is not in your assigned section.');
+    }
+
+    learner_activate_account($learnerId, $username, $password);
 }
 
 function teacher_accessible_learner_by_lrn(int $userId, string $lrn): ?array

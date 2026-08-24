@@ -9,6 +9,7 @@ require_once __DIR__ . '/app/auth.php';
 require_once __DIR__ . '/app/parents.php';
 require_once __DIR__ . '/app/grades.php';
 require_once __DIR__ . '/app/announcements.php';
+require_once __DIR__ . '/app/schedules.php';
 require_once __DIR__ . '/app/theme_settings.php';
 
 function parent_portal_format_date(?string $value, string $format = 'D, M j, Y'): string
@@ -51,6 +52,7 @@ usort($allAnnouncements, static fn ($a, $b) => strtotime($b['published_at'] ?? $
 $attendanceRows = [];
 $attendanceSummary = parent_child_month_summary([]);
 $gradeHistoryGroups = [];
+$scheduleGrid = [];
 
 if ($selectedChild !== null) {
     $attendanceRows = parent_child_month_attendance(
@@ -62,6 +64,17 @@ if ($selectedChild !== null) {
     $gradeHistoryGroups = grade_group_history_by_level(
         grade_parent_child_history((int) $user['id'], (int) $selectedChild['id'])
     );
+    foreach (parent_schedule_rows((int) $user['id'], (int) $selectedChild['id']) as $scheduleRow) {
+        $timeKey = (string) $scheduleRow['time_start'] . '|' . (string) $scheduleRow['time_end'];
+        if (!isset($scheduleGrid[$timeKey])) {
+            $scheduleGrid[$timeKey] = [
+                'time_start' => (string) $scheduleRow['time_start'],
+                'time_end' => (string) $scheduleRow['time_end'],
+                'days' => [],
+            ];
+        }
+        $scheduleGrid[$timeKey]['days'][(string) $scheduleRow['day_of_week']][] = (string) $scheduleRow['subject'];
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -355,6 +368,46 @@ if ($selectedChild !== null) {
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+
+                    <article class="parent-panel-card">
+                        <div class="panel-heading compact-heading">
+                            <h2>Class Schedule</h2>
+                            <p>Read-only schedule for <?php echo escape(trim($selectedChild['first_name'] . ' ' . $selectedChild['last_name'])); ?>.</p>
+                        </div>
+
+                        <div class="table-shell schedule-table-shell">
+                            <table class="records-table schedule-table">
+                                <thead>
+                                <tr>
+                                    <th>Day/Time</th>
+                                    <?php foreach (teacher_schedule_days() as $scheduleDay): ?>
+                                        <th><?php echo escape($scheduleDay); ?></th>
+                                    <?php endforeach; ?>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php if ($scheduleGrid === []): ?>
+                                    <tr><td colspan="6" class="empty-row">No class schedule has been posted yet.</td></tr>
+                                <?php else: ?>
+                                    <?php foreach ($scheduleGrid as $scheduleSlot): ?>
+                                        <tr>
+                                            <th><?php echo escape(teacher_schedule_time_label($scheduleSlot['time_start']) . ' - ' . teacher_schedule_time_label($scheduleSlot['time_end'])); ?></th>
+                                            <?php foreach (teacher_schedule_days() as $scheduleDay): ?>
+                                                <td>
+                                                    <?php foreach ($scheduleSlot['days'][$scheduleDay] ?? [] as $scheduleSubject): ?>
+                                                        <div class="schedule-cell-entry">
+                                                            <div class="schedule-subject"><?php echo escape($scheduleSubject); ?></div>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                </td>
+                                            <?php endforeach; ?>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>

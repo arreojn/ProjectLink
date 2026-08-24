@@ -9,7 +9,7 @@ CREATE TABLE users (
     middle_name VARCHAR(100) NULL,
     last_name VARCHAR(100) NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('admin', 'attendance', 'teacher', 'parent', 'learner', 'health') NOT NULL,
+    role ENUM('admin', 'attendance', 'teacher', 'parent', 'learner', 'student', 'health') NOT NULL,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -116,6 +116,25 @@ CREATE TABLE teacher_section_assignments (
         FOREIGN KEY (section_id) REFERENCES sections(id)
         ON DELETE CASCADE,
     CONSTRAINT fk_teacher_assignment_school_year
+        FOREIGN KEY (school_year_id) REFERENCES school_years(id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE teacher_class_schedules (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    teacher_user_id INT UNSIGNED NOT NULL,
+    school_year_id INT UNSIGNED NOT NULL,
+    day_of_week ENUM('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday') NOT NULL,
+    time_start TIME NOT NULL,
+    time_end TIME NOT NULL,
+    subject VARCHAR(150) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_teacher_schedule_slot (teacher_user_id, school_year_id, day_of_week, time_start, time_end),
+    CONSTRAINT fk_teacher_schedule_user
+        FOREIGN KEY (teacher_user_id) REFERENCES users(id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_teacher_schedule_school_year
         FOREIGN KEY (school_year_id) REFERENCES school_years(id)
         ON DELETE CASCADE
 );

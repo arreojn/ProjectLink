@@ -14,6 +14,7 @@ require_once __DIR__ . '/app/announcements.php';
 require_once __DIR__ . '/app/issues.php';
 require_once __DIR__ . '/app/theme_settings.php';
 require_once __DIR__ . '/app/health.php';
+require_once __DIR__ . '/app/schedules.php';
 require_once __DIR__ . '/password_resets.php';
 
 function format_report_time(?string $value): string
@@ -102,7 +103,7 @@ function admin_chart_color(?string $value, string $fallback = '#b45309'): string
 
 function admin_has_learner_filters(array $filters): bool
 {
-    foreach (['keyword', 'status', 'grade_level', 'section_id'] as $key) {
+    foreach (['keyword', 'status', 'grade_level', 'section_id', 'grade_section'] as $key) {
         if (trim((string) ($filters[$key] ?? '')) !== '') {
             return true;
         }
@@ -116,6 +117,8 @@ $user = require_roles(['admin']);
 $allowedModules = [
     'dashboard' => 'Dashboard',
     'learner_management' => 'Learner Management',
+    'learner_accounts' => 'Learner Accounts',
+    'class_schedule' => 'Class Schedule',
     'sections_management' => 'Sections Management',
     'teacher_management' => 'Teacher Management',
     'attendance_reports' => 'Attendance Reports',
@@ -174,9 +177,20 @@ $dataWarning = null;
 $learnerFlash = flash_get('learner_management');
 $learnerForm = learner_form_defaults();
 $learnerRows = [];
+$learnerAccountRows = [];
+$learnerAccountFlash = flash_get('learner_accounts');
+$learnerAccountSectionId = isset($_GET['account_section_id']) && ctype_digit((string) $_GET['account_section_id'])
+    ? (int) $_GET['account_section_id']
+    : 0;
+$learnerAccountSections = [];
+$learnerAccountRows = [];
+$scheduleSections = [];
+$scheduleSectionId = (int) ($_GET['section_id'] ?? 0);
+$adminScheduleRows = [];
 $learnerFilters = learner_list_filters();
 $learnerFiltersApplied = admin_has_learner_filters($learnerFilters);
 $learnerSections = [];
+$learnerFilterGradeOptions = [];
 $learnerSchoolYear = null;
 $learnerEditId = isset($_GET['edit_learner_id']) ? (int) $_GET['edit_learner_id'] : null;
 $reportWarning = null;
@@ -220,11 +234,30 @@ $systemLoginLogs = [];
 announcements_bootstrap();
 theme_settings_bootstrap();
 
+if ($module === 'class_schedule') {
+    try {
+        $scheduleSections = admin_schedule_sections();
+        $validSectionIds = array_map(static fn (array $section): int => (int) $section['id'], $scheduleSections);
+
+        if ($scheduleSectionId > 0 && in_array($scheduleSectionId, $validSectionIds, true)) {
+            $adminScheduleRows = admin_schedule_rows_for_section($scheduleSectionId);
+        } else {
+            $scheduleSectionId = 0;
+        }
+    } catch (Throwable $exception) {
+        $dataWarning = $exception->getMessage();
+    }
+}
+
 
 if ($module === 'learner_management') {
     try {
         $learnerSchoolYear = require_current_school_year();
         $learnerSections = learner_sections();
+        $learnerFilterGradeOptions = array_values(array_unique(array_map(
+            static fn (array $section): string => (string) $section['grade_level'],
+            $learnerSections
+        )));
 
         if (is_post()) {
             if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
@@ -260,9 +293,51 @@ if ($module === 'learner_management') {
             }
         }
 
-        $learnerRows = learner_list($learnerFilters);
+        $learnerRows = $learnerFiltersApplied ? learner_list($learnerFilters) : [];
     } catch (Throwable $exception) {
         $learnerFlash = [
+            'type' => 'error',
+            'message' => $exception->getMessage(),
+        ];
+    }
+}
+
+if ($module === 'learner_accounts') {
+    try {
+        $learnerAccountSections = learner_sections();
+
+        if (is_post()) {
+            if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+                throw new RuntimeException('Invalid form token. Please refresh the page.');
+            }
+
+            $learnerId = (int) ($_POST['learner_id'] ?? 0);
+            $formAction = (string) ($_POST['form_action'] ?? '');
+
+            if ($formAction === 'activate_learner_account' || $formAction === 'reset_learner_account') {
+                $learner = learner_find($learnerId);
+
+                if ($learner === null) {
+                    throw new RuntimeException('Learner record was not found.');
+                }
+
+                learner_activate_account($learnerId, (string) ($learner['lrn'] ?? ''), (string) ($learner['lrn'] ?? ''));
+                flash_set('learner_accounts', $formAction === 'reset_learner_account'
+                    ? 'Learner account reset. The LRN is the temporary username and password.'
+                    : 'Learner account activated. The LRN is the temporary username and password.');
+                redirect('admin.php?module=learner_accounts');
+            }
+
+            if ($formAction === 'deactivate_learner_account') {
+                learner_set_account_active($learnerId, false);
+                flash_set('learner_accounts', 'Learner account deactivated.');
+                redirect('admin.php?module=learner_accounts');
+            }
+        }
+
+        $learnerAccountRows = learner_account_rows($learnerAccountSectionId > 0 ? $learnerAccountSectionId : null);
+    } catch (Throwable $exception) {
+        $learnerAccountFlash = [
             'type' => 'error',
             'message' => $exception->getMessage(),
         ];
@@ -744,6 +819,8 @@ foreach ($attendanceGradeRows as $row) {
                     <div class="menu-group">
                         <p class="menu-group-title">Management</p>
                         <a href="<?php echo escape(route_url('admin.php?module=learner_management')); ?>" class="submenu-link<?php echo $module === 'learner_management' ? ' active' : ''; ?>">Learner Management</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=learner_accounts')); ?>" class="submenu-link<?php echo $module === 'learner_accounts' ? ' active' : ''; ?>">Learner Accounts</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=class_schedule')); ?>" class="submenu-link<?php echo $module === 'class_schedule' ? ' active' : ''; ?>">Class Schedule</a>
                         <a href="<?php echo escape(route_url('admin.php?module=sections_management')); ?>" class="submenu-link<?php echo $module === 'sections_management' ? ' active' : ''; ?>">Sections Management</a>
                         <a href="<?php echo escape(route_url('admin.php?module=teacher_management')); ?>" class="submenu-link<?php echo $module === 'teacher_management' ? ' active' : ''; ?>">Teacher Management</a>
                         <a href="<?php echo escape(route_url('admin.php?module=attendance_reports')); ?>" class="submenu-link<?php echo $module === 'attendance_reports' ? ' active' : ''; ?>">Attendance Reports</a>
@@ -969,6 +1046,174 @@ foreach ($attendanceGradeRows as $row) {
                             </article>
                         </div>
                     </section>
+                <?php elseif ($module === 'learner_accounts'): ?>
+                    <header class="admin-page-header">
+                        <div class="admin-page-title">
+                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="header-copy">
+                                <p class="eyebrow">Management</p>
+                                <h2>Learner Accounts</h2>
+                                <p>Activate, reset, or deactivate learner portal access. New and reset accounts use the learner LRN as a temporary username and password.</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <?php if ($learnerAccountFlash !== null): ?>
+                        <div class="alert <?php echo escape($learnerAccountFlash['type']); ?>"><?php echo escape($learnerAccountFlash['message']); ?></div>
+                    <?php endif; ?>
+
+                    <section class="admin-module-card">
+                        <form method="get" class="learner-account-filter">
+                            <input type="hidden" name="module" value="learner_accounts">
+                            <div>
+                                <label for="account_section_id">Section</label>
+                                <select id="account_section_id" name="account_section_id">
+                                    <option value="">All sections</option>
+                                    <?php foreach ($learnerAccountSections as $section): ?>
+                                        <option value="<?php echo escape((string) $section['id']); ?>"<?php echo $learnerAccountSectionId === (int) $section['id'] ? ' selected' : ''; ?>>
+                                            <?php echo escape($section['grade_level'] . ' - ' . $section['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="learner-filter-actions">
+                                <button type="submit" class="primary-button">Apply Filter</button>
+                                <a href="<?php echo escape(route_url('admin.php?module=learner_accounts')); ?>" class="secondary-link">Reset</a>
+                            </div>
+                        </form>
+                        <div class="table-shell">
+                            <table class="records-table learner-table admin-management-table">
+                                <thead>
+                                    <tr>
+                                        <th>Learner</th>
+                                        <th>LRN</th>
+                                        <th>Learner Status</th>
+                                        <th>Account</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($learnerAccountRows === []): ?>
+                                        <tr><td colspan="5" class="empty-row">No learners are available.</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($learnerAccountRows as $accountLearner): ?>
+                                            <?php
+                                            $hasAccount = !empty($accountLearner['user_id']);
+                                            $accountIsActive = $hasAccount && (int) ($accountLearner['account_is_active'] ?? 0) === 1;
+                                            ?>
+                                            <tr>
+                                                <td><?php echo escape(trim($accountLearner['last_name'] . ', ' . $accountLearner['first_name'] . ' ' . $accountLearner['middle_name'])); ?></td>
+                                                <td><?php echo escape($accountLearner['lrn']); ?></td>
+                                                <td><?php echo escape(ucfirst((string) $accountLearner['current_status'])); ?></td>
+                                                <td><?php echo escape(!$hasAccount ? 'Not activated' : ($accountIsActive ? 'Active' : 'Deactivated')); ?></td>
+                                                <td>
+                                                    <div class="table-actions">
+                                                        <form method="post" class="inline-form">
+                                                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                                            <input type="hidden" name="learner_id" value="<?php echo escape((string) $accountLearner['id']); ?>">
+                                                            <input type="hidden" name="form_action" value="<?php echo $hasAccount ? 'reset_learner_account' : 'activate_learner_account'; ?>">
+                                                            <button type="submit" class="primary-button small-link"><?php echo !$hasAccount ? 'Activate' : ($accountIsActive ? 'Reset LRN Login' : 'Reactivate Account'); ?></button>
+                                                        </form>
+                                                        <?php if ($hasAccount && $accountIsActive): ?>
+                                                            <form method="post" class="inline-form" onsubmit="return confirm('Deactivate this learner account?');">
+                                                                <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                                                <input type="hidden" name="learner_id" value="<?php echo escape((string) $accountLearner['id']); ?>">
+                                                                <input type="hidden" name="form_action" value="deactivate_learner_account">
+                                                                <button type="submit" class="danger-button">Deactivate</button>
+                                                            </form>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                <?php elseif ($module === 'class_schedule'): ?>
+                    <?php
+                    $adminScheduleGrid = [];
+                    foreach ($adminScheduleRows as $scheduleRow) {
+                        $timeKey = (string) $scheduleRow['time_start'] . '|' . (string) $scheduleRow['time_end'];
+                        if (!isset($adminScheduleGrid[$timeKey])) {
+                            $adminScheduleGrid[$timeKey] = [
+                                'time_start' => (string) $scheduleRow['time_start'],
+                                'time_end' => (string) $scheduleRow['time_end'],
+                                'days' => [],
+                            ];
+                        }
+                        $adminScheduleGrid[$timeKey]['days'][(string) $scheduleRow['day_of_week']][] = (string) $scheduleRow['subject'];
+                    }
+                    $selectedScheduleSection = null;
+                    foreach ($scheduleSections as $scheduleSection) {
+                        if ((int) $scheduleSection['id'] === $scheduleSectionId) {
+                            $selectedScheduleSection = $scheduleSection;
+                            break;
+                        }
+                    }
+                    ?>
+                    <header class="admin-page-header">
+                        <div class="admin-page-title">
+                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="header-copy">
+                                <p class="eyebrow">Management</p>
+                                <h2>Class Schedule</h2>
+                                <p>Select a current school-year grade level and section to view its read-only class schedule.</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <?php if ($dataWarning !== null): ?><div class="alert error"><?php echo escape($dataWarning); ?></div><?php endif; ?>
+
+                    <section class="admin-module-card">
+                        <form method="get" class="report-filter-grid">
+                            <input type="hidden" name="module" value="class_schedule">
+                            <div class="report-filter-field report-filter-field-wide">
+                                <label for="admin_schedule_section">Grade Level and Section</label>
+                                <select id="admin_schedule_section" name="section_id"<?php echo $scheduleSections === [] ? ' disabled' : ''; ?> required>
+                                    <option value="">Select grade level and section</option>
+                                    <?php foreach ($scheduleSections as $scheduleSection): ?>
+                                        <option value="<?php echo escape((string) $scheduleSection['id']); ?>"<?php echo $scheduleSectionId === (int) $scheduleSection['id'] ? ' selected' : ''; ?>>
+                                            <?php echo escape($scheduleSection['grade_level'] . ' - ' . $scheduleSection['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="report-actions">
+                                <button type="submit" class="primary-button"<?php echo $scheduleSections === [] ? ' disabled' : ''; ?>>View Schedule</button>
+                                <a href="<?php echo escape(route_url('admin.php?module=class_schedule')); ?>" class="secondary-link">Reset</a>
+                            </div>
+                        </form>
+                    </section>
+
+                    <?php if ($selectedScheduleSection !== null): ?>
+                        <section class="admin-module-card">
+                            <div class="panel-heading compact-heading">
+                                <h2><?php echo escape($selectedScheduleSection['grade_level'] . ' - ' . $selectedScheduleSection['name']); ?></h2>
+                                <p>Read-only weekly class schedule</p>
+                            </div>
+                            <?php if ($adminScheduleGrid === []): ?>
+                                <div class="alert neutral">No class schedule has been entered for this section.</div>
+                            <?php else: ?>
+                                <div class="table-shell schedule-table-shell">
+                                    <table class="records-table schedule-table">
+                                        <thead><tr><th>Day/Time</th><?php foreach (teacher_schedule_days() as $scheduleDay): ?><th><?php echo escape($scheduleDay); ?></th><?php endforeach; ?></tr></thead>
+                                        <tbody>
+                                        <?php foreach ($adminScheduleGrid as $scheduleSlot): ?>
+                                            <tr>
+                                                <th><?php echo escape(teacher_schedule_time_label($scheduleSlot['time_start']) . ' - ' . teacher_schedule_time_label($scheduleSlot['time_end'])); ?></th>
+                                                <?php foreach (teacher_schedule_days() as $scheduleDay): ?>
+                                                    <td><?php foreach ($scheduleSlot['days'][$scheduleDay] ?? [] as $scheduleSubject): ?><div class="schedule-cell-entry"><div class="schedule-subject"><?php echo escape($scheduleSubject); ?></div></div><?php endforeach; ?></td>
+                                                <?php endforeach; ?>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php endif; ?>
+                        </section>
+                    <?php endif; ?>
                 <?php elseif ($module === 'learner_management'): ?>
                     <header class="admin-page-header">
                         <div class="admin-page-title">
@@ -1182,23 +1427,21 @@ foreach ($attendanceGradeRows as $row) {
                             </div>
 
                             <div>
-                                <label for="filter_grade_level">Grade Level</label>
-                                <select id="filter_grade_level" name="grade_level">
-                                    <option value="">All grade levels</option>
-                                    <?php foreach ($gradeLevelOptions as $option): ?>
-                                        <option value="<?php echo escape($option); ?>"<?php echo $learnerFilters['grade_level'] === $option ? ' selected' : ''; ?>><?php echo escape($option); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label for="filter_section_id">Section</label>
-                                <select id="filter_section_id" name="section_id">
-                                    <option value="">All sections</option>
-                                    <?php foreach ($learnerSections as $section): ?>
-                                        <option value="<?php echo escape((string) $section['id']); ?>"<?php echo $learnerFilters['section_id'] === (string) $section['id'] ? ' selected' : ''; ?>>
-                                            <?php echo escape($section['grade_level'] . ' - ' . $section['name']); ?>
+                                <label for="filter_grade_section">Grade / Section</label>
+                                <select id="filter_grade_section" name="grade_section">
+                                    <option value="">All grades and sections</option>
+                                    <?php foreach ($learnerFilterGradeOptions as $option): ?>
+                                        <option value="<?php echo escape('grade:' . $option); ?>"<?php echo $learnerFilters['grade_section'] === 'grade:' . $option ? ' selected' : ''; ?>>
+                                            <?php echo escape($option . ' - All Sections'); ?>
                                         </option>
+                                        <?php foreach ($learnerSections as $section): ?>
+                                            <?php if ((string) $section['grade_level'] !== $option): ?>
+                                                <?php continue; ?>
+                                            <?php endif; ?>
+                                            <option value="<?php echo escape('section:' . (string) $section['id']); ?>"<?php echo $learnerFilters['grade_section'] === 'section:' . (string) $section['id'] ? ' selected' : ''; ?>>
+                                                <?php echo escape($section['grade_level'] . ' - ' . $section['name']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -1219,11 +1462,13 @@ foreach ($attendanceGradeRows as $row) {
                             </div>
                         </form>
 
-                        <div class="table-shell">
-                            <table class="records-table learner-table">
+                        <?php if (!$learnerFiltersApplied): ?>
+                            <div class="alert neutral">Select a filter and apply it to display learner records.</div>
+                        <?php else: ?>
+                            <div class="table-shell">
+                                <table class="records-table learner-table admin-management-table learner-list-table">
                                 <thead>
                                     <tr>
-                                        <th>Learner No.</th>
                                         <th>LRN</th>
                                         <th>Name</th>
                                         <th>Birthdate</th>
@@ -1240,12 +1485,11 @@ foreach ($attendanceGradeRows as $row) {
                                 <tbody>
                                     <?php if ($learnerRows === []): ?>
                                         <tr>
-                                            <td colspan="12" class="empty-row">No learners matched the current filter.</td>
+                                            <td colspan="11" class="empty-row">No learners matched the current filter.</td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($learnerRows as $learner): ?>
                                             <tr>
-                                                <td><?php echo escape($learner['learner_number']); ?></td>
                                                 <td><?php echo escape($learner['lrn']); ?></td>
                                                 <td>
                                                     <a href="<?php echo escape(route_url('admin.php?module=learner_management&edit_learner_id=' . $learner['id'])); ?>" class="table-inline-link">
@@ -1275,8 +1519,9 @@ foreach ($attendanceGradeRows as $row) {
                                         <?php endforeach; ?>
                                     <?php endif; ?>
                                 </tbody>
-                            </table>
-                        </div>
+                                </table>
+                            </div>
+                        <?php endif; ?>
                     </section>
                 <?php elseif ($module === 'sections_management'): ?>
                     <header class="admin-page-header">
@@ -1354,7 +1599,7 @@ foreach ($attendanceGradeRows as $row) {
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table learner-table">
+                            <table class="records-table learner-table admin-management-table sections-table">
                                 <thead>
                                     <tr>
                                         <th>Grade</th>
@@ -1499,7 +1744,7 @@ foreach ($attendanceGradeRows as $row) {
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table learner-table">
+                            <table class="records-table learner-table admin-management-table teachers-table">
                                 <thead>
                                     <tr>
                                         <th>Teacher Name</th>
@@ -1941,7 +2186,7 @@ foreach ($attendanceGradeRows as $row) {
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table learner-table">
+                            <table class="records-table learner-table admin-management-table announcements-table">
                                 <thead>
                                     <tr>
                                         <th>Title</th>
@@ -2075,7 +2320,7 @@ foreach ($attendanceGradeRows as $row) {
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table learner-table">
+                            <table class="records-table learner-table password-reset-table">
                                 <thead>
                                     <tr>
                                         <th>Requested At</th>

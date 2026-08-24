@@ -921,16 +921,18 @@ textarea:focus {
     grid-template-rows: auto 1fr auto;
     gap: 18px;
     align-self: start;
-    position: sticky;
-    top: 20px;
-    max-height: calc(100vh - 40px);
-    overflow: hidden;
+    position: static;
+    overflow: visible;
     transition: transform 220ms ease, opacity 220ms ease;
 }
 
 .sidebar-profile h1 {
     font-size: 1.7rem;
     margin-bottom: 10px;
+}
+
+.sidebar-nav {
+    min-height: 0;
 }
 
 .sidebar-user {
@@ -997,6 +999,7 @@ textarea:focus {
     padding: 20px;
     display: grid;
     gap: 14px;
+    align-content: start;
     min-width: 0;
 }
 
@@ -1009,6 +1012,125 @@ textarea:focus {
 
 .admin-page-title {
     align-items: flex-start;
+}
+
+.teacher-form-grid.schedule-entry-form {
+    grid-template-columns: minmax(96px, 0.62fr) minmax(96px, 0.62fr) minmax(200px, 1.76fr);
+    align-items: end;
+}
+
+.schedule-entry-form > div {
+    min-width: 0;
+}
+
+.schedule-entry-form input {
+    padding: 9px 10px;
+    font-size: 0.86rem;
+}
+
+.schedule-entry-form label {
+    white-space: nowrap;
+}
+
+.schedule-entry-form fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.schedule-entry-form fieldset legend {
+    margin-bottom: 8px;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.schedule-days {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+}
+
+.schedule-days label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-width: 0;
+    padding: 10px 8px;
+    border: 1px solid rgba(31, 41, 51, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.72);
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: background 140ms ease, border-color 140ms ease;
+}
+
+.schedule-days label:has(input:checked) {
+    background: rgba(180, 83, 9, 0.12);
+    border-color: rgba(180, 83, 9, 0.45);
+    color: var(--accent-strong);
+}
+
+.schedule-days input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    flex: 0 0 auto;
+}
+
+.schedule-table-shell {
+    overflow: hidden;
+}
+
+.schedule-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.schedule-table th,
+.schedule-table td {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+    white-space: normal;
+}
+
+.schedule-cell-entry {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.schedule-subject {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-weight: 700;
+}
+
+.schedule-cell-entry .danger-button {
+    max-width: 100%;
+    padding: 6px 9px;
+    font-size: 0.72rem;
+    white-space: normal;
+}
+
+.schedule-table th:first-child {
+    width: 18%;
+}
+
+.schedule-table th:not(:first-child) {
+    width: 16.4%;
+}
+
+@media (max-width: 900px) {
+    .teacher-form-grid.schedule-entry-form {
+        grid-template-columns: 1fr;
+    }
+
+    .schedule-days {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 .admin-page-header h2 {
@@ -1502,10 +1624,22 @@ textarea:focus {
     backdrop-filter: blur(16px);
     padding: 20px;
     min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .teacher-main-panel {
     min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.teacher-main-panel > section,
+.teacher-main-panel > article,
+.teacher-main-panel > header {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .teacher-header-chip {
@@ -2042,9 +2176,21 @@ textarea:focus {
 }
 
 .learner-filter-grid {
-    grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr)) auto;
+    grid-template-columns: 1.4fr repeat(2, minmax(0, 1fr)) auto;
     align-items: end;
     margin-top: 12px;
+}
+
+.learner-account-filter {
+    display: flex;
+    align-items: end;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.learner-account-filter > div:first-child {
+    width: min(320px, 100%);
 }
 
 .learner-table th,
@@ -2100,6 +2246,109 @@ textarea:focus {
     max-width: 100%;
     box-sizing: border-box;
 }
+
+.password-reset-table {
+    min-width: 100%;
+    table-layout: fixed;
+}
+
+.password-reset-table th:nth-child(1),
+.password-reset-table td:nth-child(1) { width: 21%; }
+.password-reset-table th:nth-child(2),
+.password-reset-table td:nth-child(2) { width: 18%; }
+.password-reset-table th:nth-child(3),
+.password-reset-table td:nth-child(3) { width: 27%; }
+.password-reset-table th:nth-child(4),
+.password-reset-table td:nth-child(4) { width: 12%; }
+.password-reset-table th:nth-child(5),
+.password-reset-table td:nth-child(5) { width: 22%; }
+
+.password-reset-table .table-actions .primary-button,
+.password-reset-table .table-actions .danger-button {
+    min-width: 82px;
+    padding: 7px 12px;
+    font-size: 0.8rem;
+}
+
+.admin-management-table {
+    min-width: 100%;
+    table-layout: fixed;
+}
+
+.admin-management-table th,
+.admin-management-table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+}
+
+.admin-management-table .table-actions {
+    min-width: 150px;
+}
+
+.learner-list-table th:nth-child(1),
+.learner-list-table td:nth-child(1) { width: 10%; }
+.learner-list-table th:nth-child(2),
+.learner-list-table td:nth-child(2) { width: 15%; }
+.learner-list-table th:nth-child(3),
+.learner-list-table td:nth-child(3) { width: 9%; }
+.learner-list-table th:nth-child(4),
+.learner-list-table td:nth-child(4) { width: 6%; }
+.learner-list-table th:nth-child(5),
+.learner-list-table td:nth-child(5) { width: 9%; }
+.learner-list-table th:nth-child(6),
+.learner-list-table td:nth-child(6) { width: 9%; }
+.learner-list-table th:nth-child(7),
+.learner-list-table td:nth-child(7) { width: 12%; }
+.learner-list-table th:nth-child(8),
+.learner-list-table td:nth-child(8) { width: 7%; }
+.learner-list-table th:nth-child(9),
+.learner-list-table td:nth-child(9) { width: 8%; }
+.learner-list-table th:nth-child(10),
+.learner-list-table td:nth-child(10) { width: 7%; }
+.learner-list-table th:nth-child(11),
+.learner-list-table td:nth-child(11) { width: 10%; }
+
+.sections-table th:nth-child(1),
+.sections-table td:nth-child(1) { width: 9%; }
+.sections-table th:nth-child(2),
+.sections-table td:nth-child(2) { width: 15%; }
+.sections-table th:nth-child(3),
+.sections-table td:nth-child(3) { width: 22%; }
+.sections-table th:nth-child(4),
+.sections-table td:nth-child(4) { width: 13%; }
+.sections-table th:nth-child(5),
+.sections-table td:nth-child(5) { width: 9%; }
+.sections-table th:nth-child(6),
+.sections-table td:nth-child(6) { width: 9%; }
+.sections-table th:nth-child(7),
+.sections-table td:nth-child(7) { width: 23%; }
+
+.teachers-table th:nth-child(1),
+.teachers-table td:nth-child(1) { width: 17%; }
+.teachers-table th:nth-child(2),
+.teachers-table td:nth-child(2) { width: 13%; }
+.teachers-table th:nth-child(3),
+.teachers-table td:nth-child(3) { width: 21%; }
+.teachers-table th:nth-child(4),
+.teachers-table td:nth-child(4) { width: 10%; }
+.teachers-table th:nth-child(5),
+.teachers-table td:nth-child(5) { width: 13%; }
+.teachers-table th:nth-child(6),
+.teachers-table td:nth-child(6) { width: 12%; }
+.teachers-table th:nth-child(7),
+.teachers-table td:nth-child(7) { width: 14%; }
+
+.announcements-table th:nth-child(1),
+.announcements-table td:nth-child(1) { width: 34%; }
+.announcements-table th:nth-child(2),
+.announcements-table td:nth-child(2) { width: 12%; }
+.announcements-table th:nth-child(3),
+.announcements-table td:nth-child(3) { width: 20%; }
+.announcements-table th:nth-child(4),
+.announcements-table td:nth-child(4) { width: 16%; }
+.announcements-table th:nth-child(5),
+.announcements-table td:nth-child(5) { width: 18%; }
 
 .health-selected-filter-label {
     display: flex;
@@ -2511,6 +2760,18 @@ textarea:focus {
 .report-table th,
 .report-table td {
     white-space: nowrap;
+}
+
+.records-table.schedule-table th,
+.records-table.schedule-table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    vertical-align: top;
+}
+
+.records-table.schedule-table td {
+    padding: 10px 8px;
 }
 
 .monthly-report-table th,

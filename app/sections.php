@@ -120,7 +120,8 @@ function section_list(): array
            AND le.school_year_id = s.school_year_id
          WHERE s.school_year_id = :school_year_id
          GROUP BY s.id, s.name, s.grade_level, s.adviser_name, sy.label
-         ORDER BY s.grade_level ASC, s.name ASC, s.id ASC'
+             ORDER BY FIELD(s.grade_level, \'Grade 7\', \'Grade 8\', \'Grade 9\', \'Grade 10\', \'Grade 11\', \'Grade 12\'),
+                s.grade_level ASC, s.name ASC, s.id ASC'
     );
     $statement->execute(['school_year_id' => (int) $schoolYear['id']]);
 

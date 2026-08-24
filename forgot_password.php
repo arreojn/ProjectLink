@@ -6,7 +6,7 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/app/helpers.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
-require_once __DIR__ . '/app/password_resets.php';
+require_once __DIR__ . '/password_resets.php';
 require_once __DIR__ . '/app/theme_settings.php';
 
 theme_settings_bootstrap();

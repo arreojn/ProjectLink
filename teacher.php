@@ -14,6 +14,8 @@ require_once __DIR__ . '/app/health.php';
 require_once __DIR__ . '/app/reports.php';
 require_once __DIR__ . '/app/announcements.php';
 require_once __DIR__ . '/app/issues.php';
+require_once __DIR__ . '/app/learner_messages.php';
+require_once __DIR__ . '/app/schedules.php';
 require_once __DIR__ . '/app/theme_settings.php';
 
 function teacher_module_url(string $module, array $params = []): string
@@ -204,6 +206,16 @@ $allowedModules = [
         'title' => 'Announcements',
         'description' => 'Post announcements for parents of your advisory learners.',
     ],
+    'learner_messages' => [
+        'eyebrow' => 'Communication',
+        'title' => 'Learner Messages',
+        'description' => 'Read messages sent by learners in your assigned section.',
+    ],
+    'class_schedule' => [
+        'eyebrow' => 'Class Schedule',
+        'title' => 'Class Schedule',
+        'description' => 'Create and review your weekly class schedule for the current school year.',
+    ],
     'settings' => [
         'eyebrow' => 'Account',
         'title' => 'Settings',
@@ -227,6 +239,8 @@ $existingParentForm = parent_account_form_defaults([
 $profileForm = learner_profile_form_defaults();
 $announcementForm = ['id' => null, 'title' => '', 'content' => '', 'is_published' => 0];
 $announcementRows = [];
+$learnerMessages = [];
+$scheduleRows = [];
 $adminAnnouncements = [];
 $settingsFlash = flash_get('teacher_settings');
 $activeThemeKey = 'default';
@@ -234,6 +248,28 @@ $issueForm = issue_form_defaults();
 $announcementEditId = isset($_GET['edit_announcement_id']) ? (int) $_GET['edit_announcement_id'] : null;
 $profileFormFromPost = false;
 $section = teacher_assigned_section((int) $user['id']);
+
+if ($module === 'class_schedule') {
+    try {
+        teacher_schedule_bootstrap();
+        if (is_post()) {
+            $formAction = (string) ($_POST['form_action'] ?? '');
+            if ($formAction === 'save_class_schedule') {
+                teacher_schedule_save((int) $user['id'], $_POST);
+                flash_set('teacher_dashboard', 'Class schedule entry saved successfully.');
+                redirect('teacher.php?module=class_schedule');
+            }
+            if ($formAction === 'delete_class_schedule') {
+                teacher_schedule_delete((int) $user['id'], (int) ($_POST['schedule_id'] ?? 0));
+                flash_set('teacher_dashboard', 'Class schedule entry removed.');
+                redirect('teacher.php?module=class_schedule');
+            }
+        }
+        $scheduleRows = teacher_schedule_rows((int) $user['id']);
+    } catch (Throwable $exception) {
+        $teacherFlash = ['type' => 'error', 'message' => $exception->getMessage()];
+    }
+}
 
 if (is_post()) {
     try {
@@ -306,6 +342,32 @@ if (is_post()) {
             redirect('teacher.php?module=learner_profiles&profile_learner_id=' . urlencode($profileForm['learner_id']));
         }
 
+        if ($formAction === 'activate_learner_account') {
+            $learnerId = (int) ($_POST['activate_learner_id'] ?? 0);
+            $username = trim((string) ($_POST['activate_username'] ?? ''));
+            $initialPassword = trim((string) ($_POST['activate_password'] ?? ''));
+
+            if ($learnerId <= 0) {
+                throw new RuntimeException('Select a learner to activate.');
+            }
+
+            if ($username === '') {
+                $username = learner_account_for_lrn((string) ($_POST['activate_lrn'] ?? ''))['lrn'] ?? '';
+            }
+
+            if ($username === '') {
+                throw new RuntimeException('A learner username is required.');
+            }
+
+            if ($initialPassword === '') {
+                $initialPassword = $username;
+            }
+
+            teacher_activate_learner_account((int) $user['id'], $learnerId, $username, $initialPassword);
+            flash_set('teacher_dashboard', 'Learner account activated. Default username and password are the learner LRN; the learner must change it on first login.');
+            redirect('teacher.php?module=learner_profiles&profile_learner_id=' . urlencode((string) $learnerId));
+        }
+
         if ($formAction === 'import_learner_profiles') {
             $importedCount = teacher_import_learner_profiles((int) $user['id'], $_FILES['learner_profile_file'] ?? []);
             flash_set('teacher_dashboard', 'Imported ' . $importedCount . ' learner basic profile row(s) successfully.');
@@ -348,6 +410,14 @@ if (is_post()) {
             'type' => 'error',
             'message' => $exception->getMessage(),
         ];
+    }
+}
+
+if ($module === 'learner_messages') {
+    try {
+        $learnerMessages = learner_messages_for_adviser((int) $user['id']);
+    } catch (Throwable $exception) {
+        $teacherFlash = ['type' => 'error', 'message' => $exception->getMessage()];
     }
 }
 
@@ -566,6 +636,8 @@ $pageMeta = $allowedModules[$module];
                     <div class="menu-group">
                         <p class="menu-group-title">Communication</p>
                         <a href="<?php echo escape(teacher_module_url('announcements')); ?>" class="submenu-link<?php echo $module === 'announcements' ? ' active' : ''; ?>">Announcements</a>
+                        <a href="<?php echo escape(teacher_module_url('learner_messages')); ?>" class="submenu-link<?php echo $module === 'learner_messages' ? ' active' : ''; ?>">Learner Messages</a>
+                        <a href="<?php echo escape(teacher_module_url('class_schedule')); ?>" class="submenu-link<?php echo $module === 'class_schedule' ? ' active' : ''; ?>">Class Schedule</a>
                     </div>
                     <div class="menu-group">
                         <p class="menu-group-title">Account</p>
@@ -1620,7 +1692,7 @@ $pageMeta = $allowedModules[$module];
                             <div class="alert neutral">No learner selected.</div>
                         <?php else: ?>
                             <?php $profileAge = learner_age_on_reference_date($profileForm['birthdate'], $ageReferenceDate); ?>
-                            <form method="post" class="teacher-form-grid">
+                            <form method="post" class="teacher-form-grid schedule-entry-form">
                                 <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                 <input type="hidden" name="form_action" value="save_learner_profile">
                                 <input type="hidden" name="learner_id" value="<?php echo escape($profileForm['learner_id']); ?>">
@@ -1729,6 +1801,34 @@ $pageMeta = $allowedModules[$module];
                     </article>
 
                     <?php if ($selectedProfileLearner !== null): ?>
+                        <article class="teacher-panel-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>Activate Learner Account</h2>
+                                <p>Creates the learner login using the learner LRN as both the username and the default password. The learner must change it immediately after first login.</p>
+                            </div>
+
+                            <form method="post" class="teacher-form-grid">
+                                <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                <input type="hidden" name="form_action" value="activate_learner_account">
+                                <input type="hidden" name="activate_learner_id" value="<?php echo escape((string) $selectedProfileLearner['id']); ?>">
+                                <input type="hidden" name="activate_lrn" value="<?php echo escape((string) $selectedProfileLearner['lrn']); ?>">
+
+                                <div>
+                                    <label>Username</label>
+                                    <div class="teacher-readonly-field"><?php echo escape((string) $selectedProfileLearner['lrn']); ?></div>
+                                </div>
+
+                                <div>
+                                    <label>Default Password</label>
+                                    <div class="teacher-readonly-field"><?php echo escape((string) $selectedProfileLearner['lrn']); ?></div>
+                                </div>
+
+                                <div class="teacher-form-grid-full">
+                                    <button type="submit" class="primary-button">Activate Account</button>
+                                </div>
+                            </form>
+                        </article>
+
                         <article class="teacher-panel-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Grade History</h2>
@@ -1840,6 +1940,136 @@ $pageMeta = $allowedModules[$module];
                             <?php endif; ?>
                         </article>
                     <?php endif; ?>
+                <?php elseif ($module === 'class_schedule'): ?>
+                    <?php
+                    $scheduleGrid = [];
+                    foreach ($scheduleRows as $scheduleRow) {
+                        $timeKey = (string) $scheduleRow['time_start'] . '|' . (string) $scheduleRow['time_end'];
+                        if (!isset($scheduleGrid[$timeKey])) {
+                            $scheduleGrid[$timeKey] = [
+                                'time_start' => (string) $scheduleRow['time_start'],
+                                'time_end' => (string) $scheduleRow['time_end'],
+                                'days' => [],
+                            ];
+                        }
+                        $scheduleGrid[$timeKey]['days'][(string) $scheduleRow['day_of_week']][] = [
+                            'id' => (int) $scheduleRow['id'],
+                            'subject' => (string) $scheduleRow['subject'],
+                        ];
+                    }
+                    ?>
+                    <section>
+                        <article class="teacher-panel-card">
+                            <div class="panel-heading">
+                                <h2>Enter Class Schedule</h2>
+                                <p>Add a subject to one or more Monday-Friday time slots.</p>
+                            </div>
+                            <form method="post" class="teacher-form-grid schedule-entry-form">
+                                <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                <input type="hidden" name="form_action" value="save_class_schedule">
+                                <div>
+                                    <label for="schedule_time_start">Time Start</label>
+                                    <input id="schedule_time_start" name="time_start" type="time" required>
+                                </div>
+                                <div>
+                                    <label for="schedule_time_end">Time End</label>
+                                    <input id="schedule_time_end" name="time_end" type="time" required>
+                                </div>
+                                <div>
+                                    <label for="schedule_subject">Subject</label>
+                                    <input id="schedule_subject" name="subject" type="text" maxlength="150" required>
+                                </div>
+                                <fieldset class="teacher-form-grid-full">
+                                    <legend>Days</legend>
+                                    <div class="schedule-days">
+                                        <?php foreach (teacher_schedule_days() as $scheduleDay): ?>
+                                            <label><input type="checkbox" name="days[]" value="<?php echo escape($scheduleDay); ?>"> <?php echo escape($scheduleDay); ?></label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </fieldset>
+                                <div class="learner-form-actions teacher-form-grid-full">
+                                    <button type="submit" class="primary-button">Save Schedule Entry</button>
+                                </div>
+                            </form>
+                        </article>
+                    </section>
+
+                    <section>
+                        <article class="teacher-panel-card">
+                            <div class="panel-heading">
+                                <h2>Weekly Class Schedule</h2>
+                                <p>Current school year schedule</p>
+                            </div>
+                            <div class="table-shell schedule-table-shell">
+                                <table class="records-table report-table schedule-table">
+                                    <thead>
+                                    <tr>
+                                        <th>Day/Time</th>
+                                        <?php foreach (teacher_schedule_days() as $scheduleDay): ?>
+                                            <th><?php echo escape($scheduleDay); ?></th>
+                                        <?php endforeach; ?>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php if ($scheduleGrid === []): ?>
+                                        <tr><td colspan="6" class="empty-row">No class schedule entries have been added.</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($scheduleGrid as $scheduleSlot): ?>
+                                            <tr>
+                                                <th><?php echo escape(teacher_schedule_time_label($scheduleSlot['time_start']) . ' - ' . teacher_schedule_time_label($scheduleSlot['time_end'])); ?></th>
+                                                <?php foreach (teacher_schedule_days() as $scheduleDay): ?>
+                                                    <td>
+                                                        <?php foreach ($scheduleSlot['days'][$scheduleDay] ?? [] as $scheduleEntry): ?>
+                                                            <div class="schedule-cell-entry">
+                                                                <div class="schedule-subject"><?php echo escape($scheduleEntry['subject']); ?></div>
+                                                                <form method="post" class="inline-form">
+                                                                    <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                                                    <input type="hidden" name="form_action" value="delete_class_schedule">
+                                                                    <input type="hidden" name="schedule_id" value="<?php echo escape((string) $scheduleEntry['id']); ?>">
+                                                                    <button type="submit" class="danger-button small-link">Remove</button>
+                                                                </form>
+                                                            </div>
+                                                        <?php endforeach; ?>
+                                                    </td>
+                                                <?php endforeach; ?>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
+                    </section>
+                <?php elseif ($module === 'learner_messages'): ?>
+                    <section>
+                        <article class="admin-module-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>Learner Messages</h2>
+                                <p>Messages sent to you by learners in your assigned section.</p>
+                            </div>
+                            <div class="table-shell">
+                                <table class="records-table learner-table">
+                                    <thead><tr><th>Date</th><th>Learner</th><th>LRN</th><th>Subject</th><th>Message</th><th>Status</th></tr></thead>
+                                    <tbody>
+                                    <?php if ($learnerMessages === []): ?>
+                                        <tr><td colspan="6" class="empty-row">No learner messages yet.</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($learnerMessages as $message): ?>
+                                            <tr>
+                                                <td><?php echo escape(teacher_format_date($message['created_at'])); ?></td>
+                                                <td><?php echo escape($message['learner_name']); ?></td>
+                                                <td><?php echo escape($message['lrn']); ?></td>
+                                                <td><?php echo escape($message['subject']); ?></td>
+                                                <td><?php echo nl2br(escape($message['message'])); ?></td>
+                                                <td><?php echo escape(ucfirst($message['status'])); ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
+                    </section>
                 <?php elseif ($module === 'announcements'): ?>
                     <section>
                         <article class="admin-module-card">

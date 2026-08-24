@@ -39,8 +39,8 @@ if (is_post()) {
 
         if ($errors === []) {
             auth_change_password((int) $user['id'], $currentPassword, $newPassword);
-            flash_set('account_password', 'Password changed successfully.');
-            redirect('change_password.php');
+            logout_user();
+            redirect('index.php');
         }
     } catch (RuntimeException $exception) {
         $errors[] = $exception->getMessage();
