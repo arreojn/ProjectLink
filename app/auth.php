@@ -114,6 +114,8 @@ function auth_bootstrap(): void
     auth_ensure_column('users', 'last_name', 'VARCHAR(100) NULL AFTER middle_name');
     auth_ensure_user_role('learner');
     auth_ensure_user_role('student');
+    auth_ensure_user_role('health');
+    auth_ensure_user_role('guidance');
 
     database()->exec(
         'CREATE TABLE IF NOT EXISTS auth_login_logs (

@@ -7,7 +7,9 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
 require_once __DIR__ . '/app/theme_settings.php';
 
-try { theme_settings_bootstrap(); } catch (Throwable $e) {}
+try { theme_settings_bootstrap(); } catch (Throwable $e) {
+    echo $e->getMessage();
+}
 
 start_session();
 
@@ -24,7 +26,7 @@ try {
     }
 } catch (Throwable $e) {
     $databaseConnectionOk = false;
-    $databaseWarning = 'Unable to connect to the database.';
+    $databaseWarning = $e->getMessage();
 }
 
 $errorMessage = null;
